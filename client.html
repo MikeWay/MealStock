@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Meal Stock Control</title>
+<style>
+  :root {
+    --bg:#f5f4f0;--surface:#ffffff;--surface2:#f0ede8;--border:#ddd9d0;--border2:#ccc8be;
+    --text:#1a1916;--text2:#6b6860;--text3:#9b9890;
+    --accent:#2d6a4f;--accent-light:#e8f4ee;--accent-text:#1a4a35;
+    --warn:#b45309;--warn-light:#fef3c7;
+    --danger:#991b1b;--danger-light:#fee2e2;
+    --info:#1e40af;--info-light:#dbeafe;
+    --radius:8px;--radius-lg:12px;
+    --shadow:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+    --shadow-md:0 4px 12px rgba(0,0,0,.10);
+  }
+  @media(prefers-color-scheme:dark){:root{
+    --bg:#141412;--surface:#1e1d1a;--surface2:#272520;--border:#35332e;--border2:#45433d;
+    --text:#f0ede8;--text2:#9b9890;--text3:#6b6860;
+    --accent:#4ade80;--accent-light:#052e16;--accent-text:#86efac;
+    --warn:#fbbf24;--warn-light:#292400;
+    --danger:#f87171;--danger-light:#2d0a0a;
+    --info:#60a5fa;--info-light:#0a1628;
+  }}
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+
+  /* ── Header ── */
+  .header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 16px;position:sticky;top:0;z-index:100;box-shadow:var(--shadow)}
+  .header-inner{display:flex;align-items:center;justify-content:space-between;min-height:56px;gap:12px;max-width:1400px;margin:0 auto;flex-wrap:wrap;padding:6px 0}
+  .app-title{font-size:17px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:8px;flex-shrink:0}
+  .app-title svg{color:var(--accent)}
+  .week-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;flex:1;justify-content:center}
+  .week-tabs::-webkit-scrollbar{display:none}
+  .week-tab{padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);white-space:nowrap;transition:all .15s}
+  .week-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .add-week-btn{width:28px;height:28px;border-radius:50%;border:1.5px dashed var(--border2);background:transparent;color:var(--text3);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:all .15s}
+  .add-week-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .header-actions{display:flex;gap:6px;flex-shrink:0;align-items:center}
+  .icon-btn{height:34px;padding:0 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;display:flex;align-items:center;gap:5px;font-size:13px;white-space:nowrap;transition:all .15s}
+  .icon-btn:hover{background:var(--surface2);color:var(--text)}
+  .icon-btn.active-view{background:var(--info-light);color:var(--info);border-color:var(--info)}
+  .sync-dot{width:8px;height:8px;border-radius:50%;background:#888;display:inline-block;flex-shrink:0;transition:background .3s}
+  .sync-dot.connected{background:var(--accent)}
+  .sync-dot.error{background:var(--danger)}
+  .sync-label{font-size:11px;color:var(--text3)}
+
+  /* ── Summary bar ── */
+  .summary-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:10px 16px}
+  .summary-inner{display:flex;gap:10px;max-width:1400px;margin:0 auto;flex-wrap:wrap}
+  .stat-card{flex:1;min-width:110px;background:var(--surface2);border-radius:var(--radius);padding:8px 14px}
+  .stat-label{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+  .stat-val{font-size:22px;font-weight:600}
+  .stat-val.ok{color:var(--accent)}
+  .stat-val.warn{color:var(--warn)}
+  .stat-val.danger{color:var(--danger)}
+
+  /* ── Main ── */
+  .main{max-width:1400px;margin:0 auto;padding:16px}
+
+  /* ── Sections ── */
+  .section{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);margin-bottom:14px;overflow:hidden}
+  .section-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+  .section-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  .section-icon.meat{background:#fee2e2}.section-icon.nonmeat{background:#dcfce7}.section-icon.desserts{background:#fef3c7}
+  .section-title{font-weight:600;font-size:14px}
+  .section-meta{font-size:12px;color:var(--text2);margin-left:auto;display:flex;gap:10px;align-items:center}
+  .badge{padding:2px 10px;border-radius:12px;font-size:11px;font-weight:500}
+  .badge-ok{background:var(--accent-light);color:var(--accent-text)}
+  .badge-warn{background:var(--warn-light);color:var(--warn)}
+  .badge-danger{background:var(--danger-light);color:var(--danger)}
+  .chevron{font-size:12px;color:var(--text3);transition:transform .2s}
+  .chevron.open{transform:rotate(180deg)}
+
+  /* ── Table ── */
+  .tbl-wrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;min-width:800px}
+  thead tr{background:var(--surface2)}
+  th{padding:7px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--text3);text-align:center;white-space:nowrap;border-bottom:1px solid var(--border)}
+  th.left{text-align:left}
+  th.dish-h{width:190px}th.diet-h{width:80px}th.num-h{width:60px}th.rem-h{width:58px}th.session-h{width:62px}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:hover{background:var(--surface2)}
+  tbody tr.row-danger{background:var(--danger-light)}
+  tbody tr.row-warn{background:var(--warn-light)}
+  td{padding:5px 6px;vertical-align:middle}
+  td.dish-name{padding-left:16px;font-size:13px;font-weight:500;max-width:190px}
+  td.dish-name span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  td.diet-cell{font-size:11px;color:var(--text3);text-align:center}
+  td.num-cell{text-align:center}
+  td.rem-cell{text-align:center;font-size:14px;font-weight:700}
+  .rem-ok{color:var(--accent)}.rem-warn{color:var(--warn)}.rem-danger{color:var(--danger)}
+
+  /* ── Inputs ── */
+  input[type="number"]{width:50px;height:30px;text-align:center;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;padding:0 4px;-moz-appearance:textfield;appearance:textfield}
+  input[type="number"]::-webkit-outer-spin-button,input[type="number"]::-webkit-inner-spin-button{-webkit-appearance:none}
+  input[type="number"]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-light)}
+  input[type="number"].negative{color:var(--danger)}
+  input[type="number"].positive{color:var(--accent)}
+  @keyframes flash{0%{background:var(--info-light)}100%{background:transparent}}
+  input.remote-flash{animation:flash .8s ease-out}
+
+  /* ── Low stock panel ── */
+  .low-stock-panel{background:var(--warn-light);border:1px solid var(--warn);border-radius:var(--radius-lg);padding:12px 16px;margin-bottom:14px;display:none}
+  .low-stock-panel.visible{display:block}
+  .low-stock-panel h3{font-size:13px;font-weight:600;color:var(--warn);margin-bottom:8px}
+  .low-stock-list{display:flex;flex-wrap:wrap;gap:6px}
+  .low-stock-chip{background:var(--surface);border:1px solid var(--warn);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--warn)}
+
+  /* ── Audit log view ── */
+  .audit-view{display:none}
+  .audit-view.visible{display:block}
+  .audit-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+  .audit-header h2{font-size:16px;font-weight:600}
+  .audit-filters{display:flex;gap:8px;flex-wrap:wrap}
+  .filter-input{padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit}
+  .filter-input:focus{outline:none;border-color:var(--accent)}
+  .audit-table-wrap{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);overflow:hidden}
+  .audit-table-wrap table{min-width:700px}
+  .audit-table-wrap thead th{font-size:11px;padding:8px 12px;text-align:left}
+  .audit-table-wrap tbody td{padding:7px 12px;font-size:12px;border-bottom:1px solid var(--border)}
+  .audit-table-wrap tbody tr:last-child td{border-bottom:none}
+  .audit-table-wrap tbody tr:hover{background:var(--surface2)}
+  .change-positive{color:var(--accent);font-weight:600}
+  .change-negative{color:var(--danger);font-weight:600}
+  .change-neutral{color:var(--text2)}
+  .field-pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;background:var(--surface2);color:var(--text2)}
+  .audit-empty{text-align:center;padding:3rem;color:var(--text3);font-size:14px}
+
+  /* ── Footer ── */
+  .footer{background:var(--surface);border-top:1px solid var(--border);padding:10px 16px;position:sticky;bottom:0;z-index:100}
+  .footer-inner{display:flex;gap:8px;max-width:1400px;margin:0 auto;flex-wrap:wrap;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+  .btn:hover{background:var(--surface2)}
+  .btn svg{flex-shrink:0}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn-primary:hover{opacity:.88;background:var(--accent)}
+  .btn-danger{border-color:var(--danger);color:var(--danger)}
+  .btn-danger:hover{background:var(--danger-light)}
+  .btn-info{border-color:var(--info);color:var(--info)}
+  .btn-info:hover{background:var(--info-light)}
+  .spacer{flex:1}
+  .saved-indicator{font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px;transition:color .3s}
+
+  /* ── Modals ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;pointer-events:none;transition:opacity .2s}
+  .modal-overlay.open{opacity:1;pointer-events:all}
+  .modal{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);width:100%;max-width:420px;box-shadow:var(--shadow-md)}
+  .modal-header{padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .modal-title{font-weight:600;font-size:15px}
+  .modal-close{width:28px;height:28px;border-radius:6px;border:none;background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text2);font-size:16px}
+  .modal-body{padding:16px 20px}
+  .form-row{margin-bottom:14px}
+  .form-label{font-size:12px;font-weight:500;color:var(--text2);margin-bottom:5px;display:block}
+  .form-input{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:14px;font-family:inherit}
+  .form-input:focus{outline:none;border-color:var(--accent)}
+  select.form-input{cursor:pointer}
+  .form-hint{font-size:11px;color:var(--text3);margin-top:4px}
+  .modal-footer{padding:12px 20px 16px;display:flex;gap:8px;justify-content:flex-end}
+
+  /* ── Toast ── */
+  .toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--text);color:var(--bg);padding:9px 18px;border-radius:20px;font-size:13px;font-weight:500;z-index:300;opacity:0;transition:all .2s;pointer-events:none;white-space:nowrap}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  @media(max-width:600px){
+    .app-title span{display:none}
+    .stat-card{min-width:80px;padding:7px 10px}
+    .stat-val{font-size:18px}
+    .main{padding:10px}
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-inner">
+    <div class="app-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+      <span>Meal Stock Control</span>
+    </div>
+    <div class="week-tabs" id="weekTabs"></div>
+    <div class="header-actions">
+      <span class="sync-dot" id="syncDot"></span>
+      <span class="sync-label" id="syncLabel">Connecting…</span>
+      <button class="icon-btn" id="auditToggleBtn" onclick="toggleAudit()">📋 Audit Log</button>
+      <button class="icon-btn" onclick="openAddDish()">＋ Dish</button>
+      <button class="icon-btn" onclick="openManageWeeks()">📅 Week</button>
+    </div>
+  </div>
+</div>
+
+<!-- Summary bar -->
+<div class="summary-bar"><div class="summary-inner" id="summaryBar"></div></div>
+
+<!-- Main stock view -->
+<div class="main" id="stockView">
+  <div class="low-stock-panel" id="lowStockPanel">
+    <h3>⚠ Low / Out of Stock</h3>
+    <div class="low-stock-list" id="lowStockList"></div>
+  </div>
+  <div id="sections"></div>
+</div>
+
+<!-- Audit log view -->
+<div class="main audit-view" id="auditView">
+  <div class="audit-header">
+    <h2>📋 Audit Log</h2>
+    <div class="audit-filters">
+      <input class="filter-input" id="auditSearch" placeholder="Search dish or field…" oninput="filterAudit()">
+      <select class="filter-input" id="auditWeekFilter" onchange="filterAudit()">
+        <option value="">All weeks</option>
+      </select>
+      <button class="btn" onclick="loadAudit()">↻ Refresh</button>
+      <button class="btn" onclick="exportAuditCSV()">⬇ Export CSV</button>
+    </div>
+  </div>
+  <div class="audit-table-wrap tbl-wrap">
+    <table id="auditTable">
+      <thead>
+        <tr>
+          <th>Date / Time</th>
+          <th>Device IP</th>
+          <th>Week</th>
+          <th>Category</th>
+          <th>Dish</th>
+          <th>Field</th>
+          <th>Old</th>
+          <th>New</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody id="auditBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Footer -->
+<div class="footer">
+  <div class="footer-inner" id="footerStock">
+    <button class="btn btn-primary" onclick="openOrderModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Log Order
+    </button>
+    <button class="btn btn-info" onclick="openAddDish()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>Add Dish
+    </button>
+    <button class="btn" onclick="exportCSV()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export CSV
+    </button>
+    <button class="btn btn-danger" onclick="confirmResetSession()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.36"/></svg>Reset Session
+    </button>
+    <div class="spacer"></div>
+    <div class="saved-indicator" id="savedIndicator">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Saved to DB
+    </div>
+  </div>
+</div>
+
+<!-- Order Modal -->
+<div class="modal-overlay" id="orderModal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Log New Order</span><button class="modal-close" onclick="closeModal('orderModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Select Dish</label><select class="form-input" id="orderDishSelect"></select></div>
+      <div class="form-row"><label class="form-label">Quantity Ordered</label><input type="number" class="form-input" id="orderQty" min="1" value="10"><div class="form-hint">Added to the Ordered column for this week</div></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('orderModal')">Cancel</button><button class="btn btn-primary" onclick="submitOrder()">Log Order</button></div>
+  </div>
+</div>
+
+<!-- Add Dish Modal -->
+<div class="modal-overlay" id="addDishModal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add New Dish</span><button class="modal-close" onclick="closeModal('addDishModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Dish Name</label><input type="text" class="form-input" id="newDishName" placeholder="e.g. Chicken Tikka Masala"></div>
+      <div class="form-row"><label class="form-label">Category</label><select class="form-input" id="newDishCat"><option>Meat</option><option>Non-Meat</option><option>Desserts</option></select></div>
+      <div class="form-row"><label class="form-label">Dietary Info</label><input type="text" class="form-input" id="newDishDiet" placeholder="e.g. GF, DF"><div class="form-hint">V=Vegetarian, Vg=Vegan, GF=Gluten Free, DF=Dairy Free, N=Nuts</div></div>
+      <div class="form-row"><label class="form-label">Starting Stock (this week)</label><input type="number" class="form-input" id="newDishStart" min="0" value="0"></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('addDishModal')">Cancel</button><button class="btn btn-primary" onclick="submitAddDish()">Add Dish</button></div>
+  </div>
+</div>
+
+<!-- Add Week Modal -->
+<div class="modal-overlay" id="addWeekModal">
+  <div class="modal">
+    <div class="modal-header"><span class="modal-title">Add New Week</span><button class="modal-close" onclick="closeModal('addWeekModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row"><label class="form-label">Week commencing date</label><input type="date" class="form-input" id="newWeekDate"><div class="form-hint">Remaining stock from the previous week carries forward automatically.</div></div>
+    </div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal('addWeekModal')">Cancel</button><button class="btn btn-primary" onclick="submitAddWeek()">Create Week</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SESSIONS   = ['Tues Improv','Tues Cruisers','Wed Diners','Wed Dinghies','Thurs Diners','Thurs Juniors','Thurs Cruisers','Friday'];
+const CATEGORIES = ['Meat','Non-Meat','Desserts'];
+const CAT_ICONS  = {Meat:'🍖','Non-Meat':'🥦',Desserts:'🍮'};
+const CAT_CLASS  = {Meat:'meat','Non-Meat':'nonmeat',Desserts:'desserts'};
+const LOW        = 3;
+
+let state            = {activeWeek:0, weeks:[]};
+let collapsed        = {};
+let auditData        = [];
+let auditVisible     = false;
+
+// ── WebSocket ──────────────────────────────────────────────────────
+let ws, reconnDelay = 2000;
+
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+  ws.onopen  = () => { setSyncStatus('connected','Live'); reconnDelay = 2000; };
+  ws.onclose = () => { setSyncStatus('error','Reconnecting…'); setTimeout(connectWS, reconnDelay); reconnDelay = Math.min(reconnDelay*1.5,15000); };
+  ws.onerror = () => setSyncStatus('error','Error');
+  ws.onmessage = evt => {
+    const msg = JSON.parse(evt.data);
+    if (msg.type === 'full_state') {
+      state = msg.data;
+      render();
+      showToast('Synced');
+    } else if (msg.type === 'cell_update') {
+      const {weekIdx,cat,mi,field,si,value} = msg;
+      const item = state.weeks[weekIdx]?.cats[cat]?.[mi];
+      if (!item) return;
+      if (field==='session') item.sessions[si]=value; else item[field]=value;
+      applyRemoteCell(weekIdx,cat,mi,field,si,value);
+      renderSummaryBar(); renderLowStock();
+    } else if (msg.type === 'set_active_week') {
+      state.activeWeek = msg.weekIdx;
+      renderTabs(); renderSections(); renderSummaryBar(); renderLowStock();
+    } else if (msg.type === 'error') {
+      showToast('Server error: ' + msg.message);
+    }
+  };
+}
+
+function send(msg) { if (ws && ws.readyState===1) ws.send(JSON.stringify(msg)); }
+
+function setSyncStatus(cls, label) {
+  document.getElementById('syncDot').className = 'sync-dot ' + cls;
+  document.getElementById('syncLabel').textContent = label;
+}
+
+// ── Calc ───────────────────────────────────────────────────────────
+function rem(item) {
+  return (item.start||0)+(item.ordered||0)+(item.corrections||0)+item.sessions.reduce((a,b)=>a+b,0);
+}
+
+function weekSummary(wi) {
+  let total=0,low=0,zero=0,dishes=0;
+  CATEGORIES.forEach(cat=>(state.weeks[wi].cats[cat]||[]).forEach(m=>{
+    dishes++; const r=rem(m);
+    if(r>0) total+=r; if(r<=0) zero++; else if(r<=LOW) low++;
+  }));
+  return {total,low,zero,dishes};
+}
+
+// ── Render ─────────────────────────────────────────────────────────
+function render() { renderTabs(); renderSummaryBar(); renderLowStock(); renderSections(); }
+
+function renderTabs() {
+  document.getElementById('weekTabs').innerHTML =
+    state.weeks.map((w,i)=>`<button class="week-tab${i===state.activeWeek?' active':''}" onclick="setWeek(${i})">${w.label}</button>`).join('')+
+    `<button class="add-week-btn" onclick="openManageWeeks()">＋</button>`;
+}
+
+function renderSummaryBar() {
+  if(!state.weeks.length) return;
+  const s=weekSummary(state.activeWeek);
+  document.getElementById('summaryBar').innerHTML=`
+    <div class="stat-card"><div class="stat-label">Total portions</div><div class="stat-val ok">${s.total}</div></div>
+    <div class="stat-card"><div class="stat-label">Low stock (≤${LOW})</div><div class="stat-val${s.low>0?' warn':''}">${s.low}</div></div>
+    <div class="stat-card"><div class="stat-label">Out of stock</div><div class="stat-val${s.zero>0?' danger':''}">${s.zero}</div></div>
+    <div class="stat-card"><div class="stat-label">Total dishes</div><div class="stat-val">${s.dishes}</div></div>`;
+}
+
+function renderLowStock() {
+  if(!state.weeks.length) return;
+  const items=[];
+  CATEGORIES.forEach(cat=>(state.weeks[state.activeWeek].cats[cat]||[]).forEach(m=>{
+    const r=rem(m); if(r<=LOW) items.push({name:m.name,r});
+  }));
+  const panel=document.getElementById('lowStockPanel');
+  if(!items.length){panel.classList.remove('visible');return;}
+  panel.classList.add('visible');
+  document.getElementById('lowStockList').innerHTML=items.map(it=>
+    `<span class="low-stock-chip">${it.r<=0?'❌':'⚠'} ${it.name} <strong>(${it.r})</strong></span>`).join('');
+}
+
+function renderSections() {
+  if(!state.weeks.length){document.getElementById('sections').innerHTML='<p style="color:var(--text3);padding:2rem;text-align:center">Connecting to server…</p>';return;}
+  const week=state.weeks[state.activeWeek];
+  document.getElementById('sections').innerHTML=CATEGORIES.map(cat=>{
+    const meals=week.cats[cat]||[];
+    const avail=meals.filter(m=>rem(m)>0).length;
+    const lowC=meals.filter(m=>{const r=rem(m);return r>0&&r<=LOW;}).length;
+    const zeroC=meals.filter(m=>rem(m)<=0).length;
+    let bClass='badge-ok',bText=`${avail} available`;
+    if(zeroC>0){bClass='badge-danger';bText=`${zeroC} out of stock`;}
+    else if(lowC>0){bClass='badge-warn';bText=`${lowC} low`;}
+    return `<div class="section">
+      <div class="section-head" onclick="toggleSection('${cat}')">
+        <div class="section-icon ${CAT_CLASS[cat]}">${CAT_ICONS[cat]}</div>
+        <span class="section-title">${cat}</span>
+        <div class="section-meta"><span class="badge ${bClass}">${bText}</span><span class="chevron${collapsed[cat]?'':' open'}">▼</span></div>
+      </div>
+      ${collapsed[cat]?'':
+        `<div class="section-body"><div class="tbl-wrap">${renderTable(cat,meals)}</div></div>`}
+    </div>`;
+  }).join('');
+}
+
+function renderTable(cat,meals) {
+  const sessionHeaders=SESSIONS.map(s=>{
+    const p=s.split(' ');
+    return `<th class="session-h">${p[0]}<br><small style="font-weight:400;font-size:10px">${p.slice(1).join(' ')}</small></th>`;
+  }).join('');
+  const rows=meals.map((m,mi)=>{
+    const r=rem(m);
+    const rowCls=r<=0?'row-danger':r<=LOW?'row-warn':'';
+    const remCls=r<=0?'rem-danger':r<=LOW?'rem-warn':'rem-ok';
+    const wi=state.activeWeek;
+    const sessionCells=m.sessions.map((v,si)=>
+      `<td class="num-cell"><input id="inp-${cat}-${mi}-s${si}" type="number" value="${v}"
+         data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="session" data-si="${si}"
+         onchange="handleInput(this)" class="${v<0?'negative':v>0?'positive':''}"></td>`).join('');
+    return `<tr class="${rowCls}" id="row-${cat}-${mi}">
+      <td class="dish-name" title="${m.name}"><span>${m.name}</span></td>
+      <td class="diet-cell">${m.diet||'—'}</td>
+      <td class="num-cell"><input id="inp-${cat}-${mi}-start" type="number" value="${m.start}" min="0" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="start" onchange="handleInput(this)"></td>
+      <td class="num-cell"><input id="inp-${cat}-${mi}-ordered" type="number" value="${m.ordered}" min="0" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="ordered" onchange="handleInput(this)" class="${m.ordered>0?'positive':''}"></td>
+      ${sessionCells}
+      <td class="num-cell"><input id="inp-${cat}-${mi}-corrections" type="number" value="${m.corrections}" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="corrections" onchange="handleInput(this)"></td>
+      <td class="rem-cell ${remCls}" id="rem-${cat}-${mi}">${r}</td>
+    </tr>`;
+  }).join('');
+  return `<table><thead><tr>
+    <th class="left dish-h">Dish</th><th class="diet-h">Dietary</th>
+    <th class="num-h">Start</th><th class="num-h">Ordered</th>
+    ${sessionHeaders}
+    <th class="num-h">Corr.</th><th class="rem-h">Left</th>
+  </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+// ── Input handler ──────────────────────────────────────────────────
+function handleInput(el) {
+  const cat=el.dataset.cat, mi=parseInt(el.dataset.mi), field=el.dataset.field;
+  const si=el.dataset.si!==undefined?parseInt(el.dataset.si):undefined;
+  const wi=parseInt(el.dataset.wi), value=parseInt(el.value)||0;
+  const item=state.weeks[wi].cats[cat][mi];
+  if(field==='session') item.sessions[si]=value; else item[field]=value;
+  el.className=value<0?'negative':value>0?'positive':'';
+  updateRemCell(cat,mi); renderSummaryBar(); renderLowStock();
+  send({type:'cell_update',weekIdx:wi,cat,mi,field,si,value});
+  flashSaved();
+}
+
+function updateRemCell(cat,mi) {
+  const item=state.weeks[state.activeWeek].cats[cat][mi];
+  const r=rem(item);
+  const remEl=document.getElementById(`rem-${cat}-${mi}`);
+  if(remEl){remEl.textContent=r;remEl.className=`rem-cell ${r<=0?'rem-danger':r<=LOW?'rem-warn':'rem-ok'}`;}
+  const rowEl=document.getElementById(`row-${cat}-${mi}`);
+  if(rowEl) rowEl.className=r<=0?'row-danger':r<=LOW?'row-warn':'';
+}
+
+function applyRemoteCell(wi,cat,mi,field,si,value) {
+  if(wi!==state.activeWeek) return;
+  const id=field==='session'?`inp-${cat}-${mi}-s${si}`:`inp-${cat}-${mi}-${field}`;
+  const el=document.getElementById(id);
+  if(el){
+    el.value=value;
+    el.className=value<0?'negative':value>0?'positive':'';
+    el.classList.add('remote-flash');
+    el.addEventListener('animationend',()=>el.classList.remove('remote-flash'),{once:true});
+  }
+  updateRemCell(cat,mi);
+}
+
+function flashSaved() {
+  const el=document.getElementById('savedIndicator');
+  el.style.color='var(--accent)';
+  setTimeout(()=>el.style.color='',1400);
+}
+
+// ── Controls ───────────────────────────────────────────────────────
+function setWeek(i) {
+  state.activeWeek=i;
+  send({type:'set_active_week',weekIdx:i});
+  renderTabs(); renderSections(); renderSummaryBar(); renderLowStock();
+}
+function toggleSection(cat){collapsed[cat]=!collapsed[cat];renderSections();}
+
+// ── Modals ─────────────────────────────────────────────────────────
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(el=>
+  el.addEventListener('click',e=>{if(e.target===el)closeModal(el.id);}));
+
+function openOrderModal() {
+  const week=state.weeks[state.activeWeek];
+  document.getElementById('orderDishSelect').innerHTML=CATEGORIES.map(cat=>
+    `<optgroup label="${cat}">${(week.cats[cat]||[]).map((m,mi)=>
+      `<option value="${cat}|${mi}">${m.name}</option>`).join('')}</optgroup>`).join('');
+  document.getElementById('orderQty').value=10;
+  openModal('orderModal');
+}
+
+function submitOrder() {
+  const selVal=document.getElementById('orderDishSelect').value;
+  const qty=parseInt(document.getElementById('orderQty').value)||0;
+  if(!selVal||qty<=0){showToast('Please select a dish and quantity');return;}
+  const [cat,miStr]=selVal.split('|'); const mi=parseInt(miStr);
+  send({type:'log_order',weekIdx:state.activeWeek,cat,mi,qty});
+  closeModal('orderModal');
+  showToast(`Order logged: +${qty} portions`);
+}
+
+function openAddDish(){openModal('addDishModal');}
+
+function submitAddDish() {
+  const name=document.getElementById('newDishName').value.trim();
+  const cat=document.getElementById('newDishCat').value;
+  const diet=document.getElementById('newDishDiet').value.trim();
+  const startQty=parseInt(document.getElementById('newDishStart').value)||0;
+  if(!name){showToast('Please enter a dish name');return;}
+  send({type:'add_dish',cat,name,diet,startQty});
+  closeModal('addDishModal');
+  ['newDishName','newDishDiet'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('newDishStart').value='0';
+  showToast(`"${name}" added`);
+}
+
+function openManageWeeks() {
+  const d=new Date(); const toMon=d.getDay()===0?1:8-d.getDay();
+  d.setDate(d.getDate()+toMon);
+  document.getElementById('newWeekDate').value=d.toISOString().slice(0,10);
+  openModal('addWeekModal');
+}
+
+function submitAddWeek() {
+  const dateVal=document.getElementById('newWeekDate').value;
+  if(!dateVal){showToast('Please pick a date');return;}
+  const d=new Date(dateVal);
+  const label=`w/c ${d.getDate()} ${d.toLocaleString('en-GB',{month:'short'})} ${d.getFullYear()}`;
+  send({type:'add_week',label});
+  closeModal('addWeekModal');
+  showToast(`Creating week "${label}"…`);
+}
+
+function confirmResetSession() {
+  const weekLabel=state.weeks[state.activeWeek]?.label||'this week';
+  if(!confirm(`Reset ALL session usage for ${weekLabel}?\n\nStart numbers and orders are kept. This cannot be undone.`)) return;
+  send({type:'reset_session',weekIdx:state.activeWeek});
+  showToast('Session usage cleared');
+}
+
+// ── Export CSV (stock) ─────────────────────────────────────────────
+function exportCSV() {
+  const week=state.weeks[state.activeWeek];
+  const headers=['Category','Dish','Dietary','Start','Ordered',...SESSIONS,'Corrections','Remainder'];
+  const rows=[headers.join(',')];
+  CATEGORIES.forEach(cat=>(week.cats[cat]||[]).forEach(m=>{
+    rows.push([cat,`"${m.name}"`,`"${m.diet}"`,m.start,m.ordered,...m.sessions,m.corrections,rem(m)].join(','));
+  }));
+  dl(rows.join('\n'),'text/csv',`stock-${week.label.replace(/[^a-z0-9]/gi,'-')}.csv`);
+  showToast('Stock CSV exported');
+}
+
+// ── Audit log ──────────────────────────────────────────────────────
+function toggleAudit() {
+  auditVisible=!auditVisible;
+  document.getElementById('auditView').classList.toggle('visible',auditVisible);
+  document.getElementById('stockView').style.display=auditVisible?'none':'';
+  document.getElementById('auditToggleBtn').classList.toggle('active-view',auditVisible);
+  if(auditVisible) loadAudit();
+}
+
+async function loadAudit() {
+  try {
+    const res=await fetch('/audit');
+    auditData=await res.json();
+    // Populate week filter
+    const weeks=[...new Set(auditData.map(r=>r.week_label))];
+    document.getElementById('auditWeekFilter').innerHTML=
+      '<option value="">All weeks</option>'+weeks.map(w=>`<option>${w}</option>`).join('');
+    filterAudit();
+  } catch(e) { showToast('Could not load audit log'); }
+}
+
+function filterAudit() {
+  const search=document.getElementById('auditSearch').value.toLowerCase();
+  const weekF=document.getElementById('auditWeekFilter').value;
+  const filtered=auditData.filter(r=>{
+    if(weekF && r.week_label!==weekF) return false;
+    if(search && !r.dish_name.toLowerCase().includes(search) && !r.field.toLowerCase().includes(search)) return false;
+    return true;
+  });
+  const tbody=document.getElementById('auditBody');
+  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="9" class="audit-empty">No audit entries found</td></tr>`;return;}
+  tbody.innerHTML=filtered.map(r=>{
+    const dt=new Date(r.changed_at);
+    const dateStr=dt.toLocaleDateString('en-GB')+' '+dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const oldV=r.old_value===null?'—':r.old_value;
+    const newV=r.new_value;
+    const diff=r.old_value!==null?newV-r.old_value:null;
+    const diffStr=diff===null?'':diff>0?`<span class="change-positive">+${diff}</span>`:diff<0?`<span class="change-negative">${diff}</span>`:`<span class="change-neutral">0</span>`;
+    return `<tr>
+      <td>${dateStr}</td>
+      <td>${r.device_ip||'—'}</td>
+      <td>${r.week_label}</td>
+      <td>${r.category}</td>
+      <td>${r.dish_name}</td>
+      <td><span class="field-pill">${r.field}</span></td>
+      <td>${oldV}</td>
+      <td>${newV}</td>
+      <td>${diffStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportAuditCSV() {
+  if(!auditData.length){showToast('No audit data to export');return;}
+  const headers=['Date/Time','Device IP','Week','Category','Dish','Field','Old Value','New Value','Change'];
+  const rows=[headers.join(',')];
+  auditData.forEach(r=>{
+    const dt=new Date(r.changed_at);
+    const dateStr=dt.toLocaleDateString('en-GB')+' '+dt.toLocaleTimeString('en-GB');
+    const diff=r.old_value!==null?r.new_value-r.old_value:'';
+    rows.push([`"${dateStr}"`,r.device_ip||'',`"${r.week_label}"`,r.category,`"${r.dish_name}"`,r.field,
+      r.old_value===null?'':r.old_value,r.new_value,diff].join(','));
+  });
+  dl(rows.join('\n'),'text/csv',`audit-log-${new Date().toISOString().slice(0,10)}.csv`);
+  showToast('Audit CSV exported');
+}
+
+// ── Utilities ──────────────────────────────────────────────────────
+function dl(content,type,filename) {
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([content],{type}));
+  a.download=filename; a.click(); URL.revokeObjectURL(a.href);
+}
+
+let toastTimer;
+function showToast(msg) {
+  const el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>el.classList.remove('show'),2600);
+}
+
+// ── Boot ───────────────────────────────────────────────────────────
+connectWS();
+</script>
+</body>
+</html>

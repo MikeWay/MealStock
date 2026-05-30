@@ -1,0 +1,14 @@
+{
+  "name": "meal-stock-control",
+  "version": "2.0.0",
+  "description": "Meal Stock Control — real-time multi-tablet server with PostgreSQL",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "setup-db": "node setup-db.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.3",
+    "ws": "^8.18.0"
+  }
+}
