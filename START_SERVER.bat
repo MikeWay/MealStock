@@ -24,7 +24,22 @@ if %errorlevel% neq 0 (
 :: Install node_modules if missing
 if not exist "node_modules\" (
     echo  Installing dependencies for the first time...
-    npm install --omit=dev
+    npm install
+    echo.
+)
+
+:: Build TypeScript if dist is missing
+if not exist "dist\server.js" (
+    echo  Building server...
+    npm run build
+    if %errorlevel% neq 0 (
+        color 0C
+        echo.
+        echo  Build failed. Check the error above.
+        echo.
+        pause
+        exit /b 1
+    )
     echo.
 )
 
@@ -32,14 +47,14 @@ if not exist "node_modules\" (
 :: (we use a small sentinel file so setup only runs once)
 if not exist ".db_initialised" (
     echo  Setting up database for the first time...
-    echo  (Make sure PostgreSQL is running and db-config.js is correct)
+    echo  (Make sure PostgreSQL is running and src\db-config.ts is correct)
     echo.
-    node setup-db.js
+    node dist\setup-db.js
     if %errorlevel% neq 0 (
         color 0C
         echo.
         echo  Database setup failed. Check the error above.
-        echo  Edit db-config.js with your PostgreSQL password and try again.
+        echo  Edit src\db-config.ts with your PostgreSQL password and try again.
         echo.
         pause
         exit /b 1
@@ -55,7 +70,7 @@ echo  Keep this window open while using the app.
 echo  Press Ctrl+C to stop the server.
 echo.
 
-node server.js
+node dist\server.js
 
 echo.
 echo  Server stopped.

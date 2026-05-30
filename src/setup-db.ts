@@ -1,17 +1,31 @@
-/**
- * setup-db.js
- * Run ONCE to create all tables and load the initial meal data.
- * Usage:  node setup-db.js
- *
- * Make sure DB_* variables in db-config.js match your PostgreSQL install first.
- */
-
-const { Pool } = require('pg');
-const cfg = require('./db-config');
+import { Pool } from 'pg';
+import cfg from './db-config';
 
 const pool = new Pool(cfg);
 
-const DEFAULT_WEEKS = [
+type Category = 'Meat' | 'Non-Meat' | 'Desserts';
+
+interface SeedDish {
+  name: string;
+  diet: string;
+  start: number;
+  ordered: number;
+  sessions: number[];
+}
+
+type SeedCats = Record<Category, SeedDish[]>;
+
+interface SeedWeek {
+  label: string;
+  cats: SeedCats;
+}
+
+const SESSIONS = [
+  'Tues Improv', 'Tues Cruisers', 'Wed Diners', 'Wed Dinghies',
+  'Thurs Diners', 'Thurs Juniors', 'Thurs Cruisers', 'Friday',
+] as const;
+
+const DEFAULT_WEEKS: SeedWeek[] = [
   {
     label: 'w/c 26 May 2026',
     cats: {
@@ -131,17 +145,13 @@ const DEFAULT_WEEKS = [
   },
 ];
 
-const SESSIONS = ['Tues Improv','Tues Cruisers','Wed Diners','Wed Dinghies',
-                  'Thurs Diners','Thurs Juniors','Thurs Cruisers','Friday'];
-
-async function setup() {
+async function setup(): Promise<void> {
   const client = await pool.connect();
   try {
     console.log('Connected to PostgreSQL.');
     console.log('Creating tables...');
 
     await client.query(`
-      -- Weeks
       CREATE TABLE IF NOT EXISTS weeks (
         id          SERIAL PRIMARY KEY,
         label       TEXT NOT NULL,
@@ -149,7 +159,6 @@ async function setup() {
         created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
-      -- Dishes (one row per dish per week)
       CREATE TABLE IF NOT EXISTS dishes (
         id          SERIAL PRIMARY KEY,
         week_id     INTEGER NOT NULL REFERENCES weeks(id) ON DELETE CASCADE,
@@ -163,18 +172,16 @@ async function setup() {
         updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
 
-      -- Session usage (one row per dish per session)
       CREATE TABLE IF NOT EXISTS sessions (
         id          SERIAL PRIMARY KEY,
         dish_id     INTEGER NOT NULL REFERENCES dishes(id) ON DELETE CASCADE,
-        session_idx INTEGER NOT NULL,  -- 0-7
+        session_idx INTEGER NOT NULL,
         session_name TEXT NOT NULL,
         used        INTEGER NOT NULL DEFAULT 0,
         updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         UNIQUE(dish_id, session_idx)
       );
 
-      -- Audit log — every individual field change
       CREATE TABLE IF NOT EXISTS audit_log (
         id           SERIAL PRIMARY KEY,
         changed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -182,12 +189,11 @@ async function setup() {
         week_label   TEXT NOT NULL,
         dish_name    TEXT NOT NULL,
         category     TEXT NOT NULL,
-        field        TEXT NOT NULL,   -- 'start','ordered','corrections','session:Tues Improv' etc.
+        field        TEXT NOT NULL,
         old_value    INTEGER,
         new_value    INTEGER NOT NULL
       );
 
-      -- App-level settings (e.g. active week)
       CREATE TABLE IF NOT EXISTS app_settings (
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -198,8 +204,7 @@ async function setup() {
 
     console.log('Tables created.');
 
-    // Check if data already loaded
-    const { rows } = await client.query('SELECT COUNT(*) FROM weeks');
+    const { rows } = await client.query<{ count: string }>('SELECT COUNT(*) FROM weeks');
     if (parseInt(rows[0].count) > 0) {
       console.log('Weeks already exist — skipping seed data. Done.');
       return;
@@ -208,26 +213,24 @@ async function setup() {
     console.log('Seeding initial meal data...');
     for (let wi = 0; wi < DEFAULT_WEEKS.length; wi++) {
       const week = DEFAULT_WEEKS[wi];
-      const wRes = await client.query(
+      const wRes = await client.query<{ id: number }>(
         'INSERT INTO weeks(label, sort_order) VALUES($1,$2) RETURNING id',
         [week.label, wi]
       );
       const weekId = wRes.rows[0].id;
 
-      for (const [cat, meals] of Object.entries(week.cats)) {
+      for (const [cat, meals] of Object.entries(week.cats) as [Category, SeedDish[]][]) {
         for (let mi = 0; mi < meals.length; mi++) {
           const m = meals[mi];
-          const dRes = await client.query(
+          const dRes = await client.query<{ id: number }>(
             `INSERT INTO dishes(week_id,category,sort_order,name,diet,start,ordered,corrections)
              VALUES($1,$2,$3,$4,$5,$6,$7,0) RETURNING id`,
             [weekId, cat, mi, m.name, m.diet, m.start, m.ordered]
           );
           const dishId = dRes.rows[0].id;
-
           for (let si = 0; si < SESSIONS.length; si++) {
             await client.query(
-              `INSERT INTO sessions(dish_id,session_idx,session_name,used)
-               VALUES($1,$2,$3,$4)`,
+              `INSERT INTO sessions(dish_id,session_idx,session_name,used) VALUES($1,$2,$3,$4)`,
               [dishId, si, SESSIONS[si], m.sessions[si]]
             );
           }
@@ -235,7 +238,7 @@ async function setup() {
       }
       console.log(`  Seeded: ${week.label}`);
     }
-    console.log('\nAll done! You can now run:  node server.js');
+    console.log('\nAll done! You can now run:  npm start');
   } finally {
     client.release();
     await pool.end();
@@ -243,7 +246,7 @@ async function setup() {
 }
 
 setup().catch(err => {
-  console.error('\nERROR:', err.message);
-  console.error('Make sure PostgreSQL is running and db-config.js has the correct credentials.');
+  console.error('\nERROR:', (err as Error).message);
+  console.error('Make sure PostgreSQL is running and db-config.ts has the correct credentials.');
   process.exit(1);
 });
