@@ -8,33 +8,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies (first time)
 npm install
 
-# Set up database tables and seed initial data (run once)
-node setup-db.js
+# Compile TypeScript
+npm run build
 
-# Start the server
+# Set up database tables and seed initial data (run once, after building)
+npm run setup-db
+
+# Start the server (after building)
 npm start
-# or
-node server.js
 ```
 
 The server runs on port 3000. Access the app at `http://localhost:3000` and the audit log JSON at `http://localhost:3000/audit`.
 
+To watch for changes during development: `npx tsc --watch`
+
 ## Configuration
 
-Edit `db-config.js` before starting — it exports the PostgreSQL connection config (`host`, `port`, `database`, `user`, `password`). Default assumes a local PostgreSQL install with database named `mealstock`.
+Edit `src/db-config.ts` before starting — it exports the PostgreSQL connection config (`host`, `port`, `database`, `user`, `password`). Default assumes a local PostgreSQL install with database named `mealstock`.
 
 ## Architecture
 
-This is a minimal two-file Node.js app: a server (`server.js`) and a single-page client (`client.html`) served over HTTP.
+TypeScript sources live in `src/`, compiled output goes to `dist/` (gitignored). The app is a single Node.js process serving a static `client.html`.
 
-**server.js** combines three concerns in one process:
+**`src/server.ts`** combines three concerns in one process:
 - An `http.Server` serving `client.html` at `/` and audit JSON at `/audit`
 - A `WebSocketServer` (from the `ws` package) attached to the same HTTP server
 - A PostgreSQL connection pool (`pg`) for all persistence
 
 **State flow**: On each WebSocket connection, the server sends a `full_state` message containing all weeks, dishes, and session data. Clients send mutation messages (`cell_update`, `add_dish`, `add_week`, `log_order`, `reset_session`, `set_active_week`). The server writes to PostgreSQL in a transaction, updates its in-memory `cachedState`, then broadcasts the change to all other connected clients.
 
-**In-memory cache**: `cachedState` is a module-level variable holding the full application state. It's used to resolve `dbId` references when processing `cell_update` messages (clients reference items by index, not database ID). The cache is reloaded from DB after structural mutations (`add_week`, `add_dish`, `reset_session`); for cell-level updates it's patched in place.
+**In-memory cache**: `cachedState` (`AppState | null`) is a module-level variable. It's used to resolve `dbId` references when processing `cell_update` messages (clients reference items by array index, not database ID). The cache is reloaded from DB after structural mutations (`add_week`, `add_dish`, `reset_session`); for cell-level updates it's patched in place.
+
+**Key types** (defined in `src/server.ts`):
+- `Category` — `'Meat' | 'Non-Meat' | 'Desserts'`
+- `MutableDishField` — `'start' | 'ordered' | 'corrections'`
+- `Dish`, `Week`, `AppState` — the in-memory state tree
+- `CellUpdateMsg` — shape of a `cell_update` WebSocket message
+
+WebSocket messages from clients arrive as raw JSON and are handled with `any` casts in the message handler; types are enforced at the function boundary when passed to typed helpers like `applyCellUpdate`.
 
 ## Database Schema
 
