@@ -200,9 +200,30 @@ async function setup(): Promise<void> {
       );
       INSERT INTO app_settings(key,value) VALUES('active_week_id','1')
         ON CONFLICT(key) DO NOTHING;
+
+      CREATE TABLE IF NOT EXISTS users (
+        id            SERIAL PRIMARY KEY,
+        email         TEXT NOT NULL UNIQUE,
+        display_name  TEXT NOT NULL,
+        password_hash TEXT,
+        google_id     TEXT UNIQUE,
+        facebook_id   TEXT UNIQUE,
+        microsoft_id  TEXT UNIQUE,
+        approved      BOOLEAN NOT NULL DEFAULT false,
+        is_admin      BOOLEAN NOT NULL DEFAULT false,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_name TEXT;
     `);
 
     console.log('Tables created.');
+
+    // One-time migration: flip negative session values to positive (new sign convention)
+    const migRes = await client.query('UPDATE sessions SET used = -used WHERE used < 0');
+    if ((migRes.rowCount ?? 0) > 0) {
+      console.log(`Migrated ${migRes.rowCount} session rows to positive sign convention.`);
+    }
 
     const { rows } = await client.query<{ count: string }>('SELECT COUNT(*) FROM weeks');
     if (parseInt(rows[0].count) > 0) {

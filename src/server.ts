@@ -427,12 +427,6 @@ wss.on('connection', async (ws, req) => {
         broadcast(orderUpdate, ws);
         ws.send(JSON.stringify(orderUpdate));
 
-      } else if (msg.type === 'reset_session') {
-        const week = cachedState!.weeks[msg.weekIdx];
-        await resetSessionUsage(week.dbId, week.label, deviceIp, userName);
-        cachedState = await loadFullState();
-        broadcast({ type: 'full_state', data: cachedState }, ws);
-        ws.send(JSON.stringify({ type: 'full_state', data: cachedState }));
       }
 
     } catch (e) {

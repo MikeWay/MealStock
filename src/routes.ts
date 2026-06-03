@@ -25,7 +25,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function adminPage(rows: string): string {
+function adminPage(rows: string, weeks: { id: number; label: string }[]): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -58,6 +58,18 @@ function adminPage(rows: string): string {
 <thead><tr><th>Email</th><th>Name</th><th>Status</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead>
 <tbody>${rows}</tbody>
 </table>
+
+<h2 style="font-size:16px;margin:32px 0 12px">Reset Session</h2>
+<p style="color:var(--text2);margin-bottom:12px;font-size:13px">
+  Zeroes all session usage and corrections for the selected week. Start and ordered values are kept.
+</p>
+<form method="post" action="/admin/reset-session"
+      onsubmit="return confirm('Reset session usage for the selected week? This cannot be undone.')">
+  <select name="weekId" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px;margin-right:8px">
+    ${weeks.map(w => `<option value="${w.id}">${esc(w.label)}</option>`).join('')}
+  </select>
+  <button type="submit" class="btn-reject" style="font-size:13px;padding:6px 16px">Reset Session</button>
+</form>
 
 <h2 style="font-size:16px;margin:32px 0 12px">Global Reset</h2>
 <p style="color:var(--text2);margin-bottom:12px;font-size:13px">
@@ -182,11 +194,17 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
   }
 
   router.get('/admin', requireAdmin, async (req: Request, res: Response) => {
-    const result = await pool.query<AppUser & { created_at: string }>(
-      'SELECT id, email, display_name, approved, is_admin, created_at FROM users ORDER BY created_at'
-    );
+    const [usersResult, weeksResult] = await Promise.all([
+      pool.query<AppUser & { created_at: string }>(
+        'SELECT id, email, display_name, approved, is_admin, created_at FROM users ORDER BY created_at'
+      ),
+      pool.query<{ id: number; label: string }>(
+        'SELECT id, label FROM weeks ORDER BY sort_order'
+      ),
+    ]);
+    const weeks = weeksResult.rows;
     const me = req.user!.id;
-    const rows = result.rows.map(u => {
+    const rows = usersResult.rows.map(u => {
       const isSelf = u.id === me;
       const actions = isSelf ? '<span style="color:var(--text2);font-size:12px">(you)</span>' : `
         <div class="actions">
@@ -203,7 +221,7 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
       </tr>`;
     }).join('');
 
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows));
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows, weeks));
   });
 
   router.post('/admin/users/:id/approve', requireAdmin, async (req: Request, res: Response) => {
@@ -213,6 +231,40 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
 
   router.post('/admin/users/:id/reject', requireAdmin, async (req: Request, res: Response) => {
     await pool.query('DELETE FROM users WHERE id=$1 AND id!=$2', [req.params.id, req.user!.id]);
+    res.redirect('/admin');
+  });
+
+  router.post('/admin/reset-session', requireAdmin, async (req: Request, res: Response) => {
+    const weekId = parseInt(req.body.weekId);
+    if (!weekId) { res.redirect('/admin'); return; }
+    const weekRes = await pool.query<{ label: string }>(
+      'SELECT label FROM weeks WHERE id=$1', [weekId]
+    );
+    if (!weekRes.rows.length) { res.redirect('/admin'); return; }
+    const weekLabel = weekRes.rows[0].label;
+    const userName = (req.user as AppUser).display_name;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const dishRes = await client.query<{ id: number; name: string; category: string }>(
+        'SELECT id, name, category FROM dishes WHERE week_id=$1', [weekId]
+      );
+      for (const d of dishRes.rows) {
+        await client.query('UPDATE sessions SET used=0, updated_at=NOW() WHERE dish_id=$1', [d.id]);
+        await client.query('UPDATE dishes SET corrections=0, updated_at=NOW() WHERE id=$1', [d.id]);
+        await client.query(
+          `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+           VALUES($1,$2,$3,$4,$5,'SESSION_RESET',NULL,0)`,
+          [req.ip, userName, weekLabel, d.name, d.category]
+        );
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
     res.redirect('/admin');
   });
 
