@@ -100,6 +100,7 @@
   input[type="number"]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-light)}
   input[type="number"].negative{color:var(--danger)}
   input[type="number"].positive{color:var(--accent)}
+  input.derived-start{background:transparent;color:var(--text2);border-color:transparent;cursor:default;pointer-events:none}
   @keyframes flash{0%{background:var(--info-light)}100%{background:transparent}}
   input.remote-flash{animation:flash .8s ease-out}
 
@@ -350,14 +351,17 @@ function setSyncStatus(cls, label) {
 }
 
 // ── Calc ───────────────────────────────────────────────────────────
-function rem(item) {
-  return (item.start||0)+(item.ordered||0)+(item.corrections||0)+item.sessions.reduce((a,b)=>a+b,0);
+function rem(wi, cat, mi) {
+  const item = state.weeks[wi]?.cats[cat]?.[mi];
+  if (!item) return 0;
+  const start = wi > 0 ? rem(wi-1, cat, mi) : (item.start||0);
+  return start + (item.ordered||0) + (item.corrections||0) - item.sessions.reduce((a,b)=>a+b,0);
 }
 
 function weekSummary(wi) {
   let total=0,low=0,zero=0,dishes=0;
-  CATEGORIES.forEach(cat=>(state.weeks[wi].cats[cat]||[]).forEach(m=>{
-    dishes++; const r=rem(m);
+  CATEGORIES.forEach(cat=>(state.weeks[wi].cats[cat]||[]).forEach((m,mi)=>{
+    dishes++; const r=rem(wi, cat, mi);
     if(r>0) total+=r; if(r<=0) zero++; else if(r<=LOW) low++;
   }));
   return {total,low,zero,dishes};
@@ -424,18 +428,22 @@ function renderTable(cat,meals) {
     return `<th class="session-h">${p[0]}<br><small style="font-weight:400;font-size:10px">${p.slice(1).join(' ')}</small></th>`;
   }).join('');
   const rows=meals.map((m,mi)=>{
-    const r=rem(m);
+    const wi=state.activeWeek;
+    const r=rem(wi, cat, mi);
     const rowCls=r<=0?'row-danger':r<=LOW?'row-warn':'';
     const remCls=r<=0?'rem-danger':r<=LOW?'rem-warn':'rem-ok';
-    const wi=state.activeWeek;
     const sessionCells=m.sessions.map((v,si)=>
       `<td class="num-cell"><input id="inp-${cat}-${mi}-s${si}" type="number" value="${v}"
          data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="session" data-si="${si}"
-         onchange="handleInput(this)" class="${v<0?'negative':v>0?'positive':''}"></td>`).join('');
+         onchange="handleInput(this)" class="${v>0?'negative':v<0?'positive':''}"></td>`).join('');
+    const derivedStart = wi > 0 ? rem(wi-1, cat, mi) : null;
+    const startCell = wi > 0
+      ? `<td class="num-cell"><input id="inp-${cat}-${mi}-start" type="number" value="${derivedStart}" readonly data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="start" class="derived-start"></td>`
+      : `<td class="num-cell"><input id="inp-${cat}-${mi}-start" type="number" value="${m.start}" min="0" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="start" onchange="handleInput(this)"></td>`;
     return `<tr class="${rowCls}" id="row-${cat}-${mi}">
       <td class="dish-name" title="${m.name}"><span>${m.name}</span></td>
       <td class="diet-cell">${m.diet||'—'}</td>
-      <td class="num-cell"><input id="inp-${cat}-${mi}-start" type="number" value="${m.start}" min="0" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="start" onchange="handleInput(this)"></td>
+      ${startCell}
       <td class="num-cell"><input id="inp-${cat}-${mi}-ordered" type="number" value="${m.ordered}" min="0" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="ordered" onchange="handleInput(this)" class="${m.ordered>0?'positive':''}"></td>
       ${sessionCells}
       <td class="num-cell"><input id="inp-${cat}-${mi}-corrections" type="number" value="${m.corrections}" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="corrections" onchange="handleInput(this)"></td>
@@ -457,15 +465,17 @@ function handleInput(el) {
   const wi=parseInt(el.dataset.wi), value=parseInt(el.value)||0;
   const item=state.weeks[wi].cats[cat][mi];
   if(field==='session') item.sessions[si]=value; else item[field]=value;
-  el.className=value<0?'negative':value>0?'positive':'';
+  el.className = field==='session'
+    ? (value>0?'negative':value<0?'positive':'')
+    : (value<0?'negative':value>0?'positive':'');
   updateRemCell(cat,mi); renderSummaryBar(); renderLowStock();
   send({type:'cell_update',weekIdx:wi,cat,mi,field,si,value});
   flashSaved();
 }
 
 function updateRemCell(cat,mi) {
-  const item=state.weeks[state.activeWeek].cats[cat][mi];
-  const r=rem(item);
+  const wi=state.activeWeek;
+  const r=rem(wi, cat, mi);
   const remEl=document.getElementById(`rem-${cat}-${mi}`);
   if(remEl){remEl.textContent=r;remEl.className=`rem-cell ${r<=0?'rem-danger':r<=LOW?'rem-warn':'rem-ok'}`;}
   const rowEl=document.getElementById(`row-${cat}-${mi}`);
@@ -478,7 +488,9 @@ function applyRemoteCell(wi,cat,mi,field,si,value) {
   const el=document.getElementById(id);
   if(el){
     el.value=value;
-    el.className=value<0?'negative':value>0?'positive':'';
+    el.className = field==='session'
+      ? (value>0?'negative':value<0?'positive':'')
+      : (value<0?'negative':value>0?'positive':'');
     el.classList.add('remote-flash');
     el.addEventListener('animationend',()=>el.classList.remove('remote-flash'),{once:true});
   }

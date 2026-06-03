@@ -1,12 +1,19 @@
 import http from 'http';
+import net from 'net';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
 import { Pool } from 'pg';
+import express, { Request, Response } from 'express';
+import session from 'express-session';
+import connectPgSimple from 'connect-pg-simple';
+import passport from 'passport';
 import cfg from './db-config';
+import { AppUser, configurePassport, requireAuth } from './auth';
+import { createAuthRouter, OAuthProviders } from './routes';
 
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000');
 const pool = new Pool(cfg);
 
 const SESSIONS = [
@@ -107,7 +114,9 @@ async function loadFullState(): Promise<AppState> {
   }
 }
 
-async function applyCellUpdate(msg: CellUpdateMsg, state: AppState, deviceIp: string): Promise<void> {
+async function applyCellUpdate(
+  msg: CellUpdateMsg, state: AppState, deviceIp: string, userName: string
+): Promise<void> {
   const dish = state.weeks[msg.weekIdx]?.cats[msg.cat]?.[msg.mi];
   if (!dish?.dbId) throw new Error('Dish not found in state');
 
@@ -135,9 +144,9 @@ async function applyCellUpdate(msg: CellUpdateMsg, state: AppState, deviceIp: st
 
     const fieldLabel = msg.field === 'session' ? `session:${SESSIONS[msg.si ?? 0]}` : msg.field;
     await client.query(
-      `INSERT INTO audit_log(device_ip, week_label, dish_name, category, field, old_value, new_value)
-       VALUES($1,$2,$3,$4,$5,$6,$7)`,
-      [deviceIp, weekLabel, dish.name, msg.cat, fieldLabel, oldValue, msg.value]
+      `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [deviceIp, userName, weekLabel, dish.name, msg.cat, fieldLabel, oldValue, msg.value]
     );
 
     await client.query('COMMIT');
@@ -173,7 +182,7 @@ async function addWeek(label: string, prevWeek: Week): Promise<number> {
       for (let mi = 0; mi < meals.length; mi++) {
         const m = meals[mi];
         const remainder = Math.max(0,
-          m.start + m.ordered + m.corrections + m.sessions.reduce((a, b) => a + b, 0)
+          m.start + m.ordered + m.corrections - m.sessions.reduce((a, b) => a + b, 0)
         );
         const dRes = await client.query<{ id: number }>(
           `INSERT INTO dishes(week_id,category,sort_order,name,diet,start,ordered,corrections)
@@ -238,7 +247,7 @@ async function addDish(
 
 async function logOrder(
   dishDbId: number, qty: number, weekLabel: string,
-  dishName: string, cat: Category, oldVal: number, deviceIp: string
+  dishName: string, cat: Category, oldVal: number, deviceIp: string, userName: string
 ): Promise<void> {
   const client = await pool.connect();
   try {
@@ -248,9 +257,9 @@ async function logOrder(
       [qty, dishDbId]
     );
     await client.query(
-      `INSERT INTO audit_log(device_ip,week_label,dish_name,category,field,old_value,new_value)
-       VALUES($1,$2,$3,$4,'ordered',$5,$6)`,
-      [deviceIp, weekLabel, dishName, cat, oldVal, oldVal + qty]
+      `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+       VALUES($1,$2,$3,$4,$5,'ordered',$6,$7)`,
+      [deviceIp, userName, weekLabel, dishName, cat, oldVal, oldVal + qty]
     );
     await client.query('COMMIT');
   } catch (e) {
@@ -261,7 +270,9 @@ async function logOrder(
   }
 }
 
-async function resetSessionUsage(weekDbId: number, weekLabel: string, deviceIp: string): Promise<void> {
+async function resetSessionUsage(
+  weekDbId: number, weekLabel: string, deviceIp: string, userName: string
+): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -272,9 +283,9 @@ async function resetSessionUsage(weekDbId: number, weekLabel: string, deviceIp: 
       await client.query('UPDATE sessions SET used=0, updated_at=NOW() WHERE dish_id=$1', [d.id]);
       await client.query('UPDATE dishes SET corrections=0, updated_at=NOW() WHERE id=$1', [d.id]);
       await client.query(
-        `INSERT INTO audit_log(device_ip,week_label,dish_name,category,field,old_value,new_value)
-         VALUES($1,$2,$3,$4,'SESSION_RESET',NULL,0)`,
-        [deviceIp, weekLabel, d.name, d.category]
+        `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+         VALUES($1,$2,$3,$4,$5,'SESSION_RESET',NULL,0)`,
+        [deviceIp, userName, weekLabel, d.name, d.category]
       );
     }
     await client.query('COMMIT');
@@ -288,43 +299,64 @@ async function resetSessionUsage(weekDbId: number, weekLabel: string, deviceIp: 
 
 async function getAuditLog(limit = 200): Promise<unknown[]> {
   const res = await pool.query(
-    `SELECT id, changed_at, device_ip, week_label, dish_name, category, field, old_value, new_value
+    `SELECT id, changed_at, device_ip, user_name, week_label, dish_name, category, field, old_value, new_value
      FROM audit_log ORDER BY changed_at DESC LIMIT $1`,
     [limit]
   );
   return res.rows;
 }
 
-// ── HTTP server ─────────────────────────────────────────────────────
+// ── Express app ─────────────────────────────────────────────────────
+
+const providers: OAuthProviders = {
+  google:    !!(process.env.GOOGLE_CLIENT_ID    && process.env.GOOGLE_CLIENT_SECRET),
+  facebook:  !!(process.env.FACEBOOK_APP_ID     && process.env.FACEBOOK_APP_SECRET),
+  microsoft: !!(process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET),
+};
+
+configurePassport(pool);
+
+const PgStore = connectPgSimple(session);
+const sessionMiddleware = session({
+  store: new PgStore({ pool, createTableIfMissing: true }),
+  secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production' },
+});
 
 function getClientHTML(): string {
-  // client.html lives in project root; __dirname here is dist/
   const p = path.join(__dirname, '..', 'client.html');
   return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : '<h1>client.html not found</h1>';
 }
 
-const server = http.createServer(async (req, res) => {
-  if (req.method === 'GET' && req.url === '/') {
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    return res.end(getClientHTML());
-  }
-  if (req.method === 'GET' && req.url === '/audit') {
-    try {
-      const rows = await getAuditLog(500);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify(rows));
-    } catch (e) {
-      res.writeHead(500);
-      return res.end((e as Error).message);
-    }
-  }
-  res.writeHead(404);
-  res.end('Not found');
+const app = express();
+app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+app.use(sessionMiddleware);
+app.use(passport.initialize());
+app.use(passport.session());
+app.use(createAuthRouter(pool, providers));
+
+app.get('/', requireAuth, (_req: Request, res: Response) => {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8').send(getClientHTML());
 });
 
-// ── WebSocket server ────────────────────────────────────────────────
+app.get('/audit', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    const rows = await getAuditLog(500);
+    res.setHeader('Content-Type', 'application/json').send(JSON.stringify(rows));
+  } catch (e) {
+    res.status(500).send((e as Error).message);
+  }
+});
 
-const wss = new WebSocketServer({ server });
+const server = http.createServer(app);
+
+// ── WebSocket server ─────────────────────────────────────────────────
+// noServer mode: upgrades are validated manually before handleUpgrade
+
+const wss = new WebSocketServer({ noServer: true });
 
 let cachedState: AppState | null = null;
 
@@ -336,6 +368,8 @@ function broadcast(msg: unknown, excludeSocket?: WebSocket): void {
 }
 
 wss.on('connection', async (ws, req) => {
+  const user = (req as unknown as { user?: AppUser }).user;
+  const userName = user?.display_name ?? 'unknown';
   const deviceIp = (req.headers['x-forwarded-for'] as string | undefined) ?? req.socket.remoteAddress ?? 'unknown';
 
   try {
@@ -352,13 +386,15 @@ wss.on('connection', async (ws, req) => {
 
     try {
       if (msg.type === 'cell_update') {
-        await applyCellUpdate(msg as CellUpdateMsg, cachedState!, deviceIp);
-        const item = cachedState!.weeks[msg.weekIdx]?.cats[msg.cat as Category]?.[msg.mi];
-        if (item) {
-          if (msg.field === 'session') item.sessions[msg.si as number] = msg.value;
-          else item[msg.field as MutableDishField] = msg.value;
+        if (!(msg.field === 'start' && msg.weekIdx > 0)) {
+          await applyCellUpdate(msg as CellUpdateMsg, cachedState!, deviceIp, userName);
+          const item = cachedState!.weeks[msg.weekIdx]?.cats[msg.cat as Category]?.[msg.mi];
+          if (item) {
+            if (msg.field === 'session') item.sessions[msg.si as number] = msg.value;
+            else item[msg.field as MutableDishField] = msg.value;
+          }
+          broadcast({ type: 'cell_update', weekIdx: msg.weekIdx, cat: msg.cat, mi: msg.mi, field: msg.field, si: msg.si, value: msg.value }, ws);
         }
-        broadcast({ type: 'cell_update', weekIdx: msg.weekIdx, cat: msg.cat, mi: msg.mi, field: msg.field, si: msg.si, value: msg.value }, ws);
 
       } else if (msg.type === 'set_active_week') {
         cachedState!.activeWeek = msg.weekIdx;
@@ -385,7 +421,7 @@ wss.on('connection', async (ws, req) => {
         const week = cachedState!.weeks[msg.weekIdx];
         const dish = week?.cats[msg.cat as Category]?.[msg.mi];
         if (!dish) return;
-        await logOrder(dish.dbId, msg.qty as number, week.label, dish.name, msg.cat as Category, dish.ordered, deviceIp);
+        await logOrder(dish.dbId, msg.qty as number, week.label, dish.name, msg.cat as Category, dish.ordered, deviceIp, userName);
         dish.ordered += msg.qty as number;
         const orderUpdate = { type: 'cell_update', weekIdx: msg.weekIdx, cat: msg.cat, mi: msg.mi, field: 'ordered', value: dish.ordered };
         broadcast(orderUpdate, ws);
@@ -393,7 +429,7 @@ wss.on('connection', async (ws, req) => {
 
       } else if (msg.type === 'reset_session') {
         const week = cachedState!.weeks[msg.weekIdx];
-        await resetSessionUsage(week.dbId, week.label, deviceIp);
+        await resetSessionUsage(week.dbId, week.label, deviceIp, userName);
         cachedState = await loadFullState();
         broadcast({ type: 'full_state', data: cachedState }, ws);
         ws.send(JSON.stringify({ type: 'full_state', data: cachedState }));
@@ -408,9 +444,38 @@ wss.on('connection', async (ws, req) => {
   ws.on('error', () => {});
 });
 
+// Validate session + approval before accepting WebSocket upgrade
+server.on('upgrade', (req: http.IncomingMessage, socket: net.Socket, head: Buffer) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sessionMiddleware(req as any, {} as any, () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    passport.initialize()(req as any, {} as any, () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      passport.session()(req as any, {} as any, () => {
+        const user = (req as unknown as { user?: AppUser }).user;
+        if (!user) {
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy(); return;
+        }
+        if (!user.approved) {
+          socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+          socket.destroy(); return;
+        }
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit('connection', ws, req);
+        });
+      });
+    });
+  });
+});
+
 // ── Start ───────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
+  if ((process.env.SESSION_SECRET || 'dev-secret-change-me') === 'dev-secret-change-me') {
+    console.warn('\nWARNING: SESSION_SECRET is not set. Using insecure default — set SESSION_SECRET in production.\n');
+  }
+
   try {
     await pool.query('SELECT 1');
     console.log('PostgreSQL connected.');
@@ -418,7 +483,7 @@ async function main(): Promise<void> {
     console.error('\nERROR: Cannot connect to PostgreSQL.');
     console.error((e as Error).message);
     console.error('\nCheck db-config.ts has the correct host/user/password.');
-    console.error('Make sure PostgreSQL is running (check Services in Windows).\n');
+    console.error('Make sure PostgreSQL is running.\n');
     process.exit(1);
   }
 
@@ -439,8 +504,9 @@ async function main(): Promise<void> {
         console.log(`║  Network: ${url}${pad}║`);
       });
     console.log('╠══════════════════════════════════════════════════╣');
-    console.log('║  Audit log: http://localhost:3000/audit          ║');
-    console.log('║  Share the Network URL with your tablets         ║');
+    console.log('║  Login:   http://localhost:3000/login            ║');
+    console.log('║  Admin:   http://localhost:3000/admin            ║');
+    console.log('║  Audit:   http://localhost:3000/audit            ║');
     console.log('║  Press Ctrl+C to stop                            ║');
     console.log('╚══════════════════════════════════════════════════╝\n');
   });
