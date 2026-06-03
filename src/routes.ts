@@ -4,7 +4,8 @@ import bcrypt from 'bcrypt';
 import path from 'path';
 import fs from 'fs';
 import { Pool } from 'pg';
-import { AppUser, createLocalUser, requireAdmin } from './auth';
+import { AppUser, createLocalUser, requireAdmin, createPasswordResetToken, consumePasswordResetToken, validatePasswordResetToken } from './auth';
+import { sendPasswordResetEmail } from './mailer';
 
 export interface OAuthProviders {
   google: boolean;
@@ -167,6 +168,55 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
     req.logout(() => {
       req.session.destroy(() => res.redirect('/login'));
     });
+  });
+
+  router.get('/auth/forgot-password', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(readFile('forgot-password.html'));
+  });
+
+  router.post('/auth/forgot-password', async (req: Request, res: Response) => {
+    const { email } = req.body as { email?: string };
+    if (!email) { res.redirect('/auth/forgot-password?sent=1'); return; }
+    try {
+      const user = await pool.query<{ id: number; password_hash: string | null }>(
+        'SELECT id, password_hash FROM users WHERE email=$1',
+        [email.toLowerCase().trim()]
+      );
+      const u = user.rows[0];
+      if (u && u.password_hash) {
+        const token = await createPasswordResetToken(pool, u.id);
+        const base = process.env.APP_BASE_URL || 'http://localhost:3000';
+        await sendPasswordResetEmail(email, `${base}/auth/reset-password?token=${token}`);
+      }
+    } catch (e) {
+      console.error('Password reset email error:', e);
+    }
+    res.redirect('/auth/forgot-password?sent=1');
+  });
+
+  router.get('/auth/reset-password', async (req: Request, res: Response) => {
+    const token = typeof req.query.token === 'string' ? req.query.token : '';
+    // No token means we're showing an error page (e.g. after ?error=invalid redirect) — serve as-is
+    if (!token) {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8').send(readFile('reset-password.html'));
+      return;
+    }
+    if (!(await validatePasswordResetToken(pool, token))) {
+      res.redirect('/auth/reset-password?error=invalid');
+      return;
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(readFile('reset-password.html'));
+  });
+
+  router.post('/auth/reset-password', async (req: Request, res: Response) => {
+    const { token, password } = req.body as { token?: string; password?: string };
+    if (!token || !password) { res.redirect('/auth/reset-password?error=invalid'); return; }
+    if (password.length < 8) { res.redirect(`/auth/reset-password?token=${encodeURIComponent(token)}&error=short`); return; }
+    const userId = await consumePasswordResetToken(pool, token);
+    if (!userId) { res.redirect('/auth/reset-password?error=invalid'); return; }
+    const hash = await bcrypt.hash(password, 12);
+    await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, userId]);
+    res.redirect('/login?reset=1');
   });
 
   if (providers.google) {
