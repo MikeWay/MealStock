@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { Pool } from 'pg';
+import { notifyAdminsOfNewUser } from './mailer';
 import { Request, Response, NextFunction } from 'express';
 import passport from 'passport';
 import { Strategy as LocalStrategy } from 'passport-local';
@@ -84,7 +85,13 @@ export async function upsertOAuthUser(
      VALUES($1,$2,$3,$4,$5) RETURNING id, email, display_name, approved, is_admin`,
     [email, displayName, providerId, first, first]
   );
-  return res.rows[0];
+  const newUser = res.rows[0];
+  if (!first) {
+    notifyAdminsOfNewUser(pool, newUser.email, newUser.display_name).catch(e =>
+      console.error('Admin registration notification failed:', e)
+    );
+  }
+  return newUser;
 }
 
 export function configurePassport(pool: Pool): void {
@@ -153,6 +160,14 @@ export function configurePassport(pool: Pool): void {
       } catch (e) { done(e); }
     }));
   }
+}
+
+export function validatePasswordComplexity(password: string): string | null {
+  if (password.length < 8)       return 'Password must be at least 8 characters.';
+  if (!/[A-Z]/.test(password))   return 'Password must contain at least one uppercase letter.';
+  if (!/[a-z]/.test(password))   return 'Password must contain at least one lowercase letter.';
+  if (!/[0-9]/.test(password))   return 'Password must contain at least one number.';
+  return null;
 }
 
 function sha256(token: string): string {

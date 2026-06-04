@@ -4,8 +4,8 @@ import bcrypt from 'bcrypt';
 import path from 'path';
 import fs from 'fs';
 import { Pool } from 'pg';
-import { AppUser, createLocalUser, requireAdmin, createPasswordResetToken, consumePasswordResetToken, validatePasswordResetToken } from './auth';
-import { sendPasswordResetEmail } from './mailer';
+import { AppUser, createLocalUser, requireAdmin, createPasswordResetToken, consumePasswordResetToken, validatePasswordResetToken, validatePasswordComplexity } from './auth';
+import { sendPasswordResetEmail, notifyAdminsOfNewUser } from './mailer';
 
 export interface OAuthProviders {
   google: boolean;
@@ -141,13 +141,19 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
     const { email, password, display_name } = req.body as {
       email?: string; password?: string; display_name?: string;
     };
-    if (!email || !password || password.length < 8) {
-      res.redirect('/login?error=invalid'); return;
+    const pwError = validatePasswordComplexity(password || '');
+    if (!email || pwError) {
+      res.redirect(`/login?error=${pwError ? 'weak' : 'invalid'}`); return;
     }
     try {
-      const hash = await bcrypt.hash(password, 12);
+      const hash = await bcrypt.hash(password!, 12);
       const name = (display_name || '').trim() || email.split('@')[0];
       const user = await createLocalUser(pool, email.toLowerCase().trim(), name, hash);
+      if (!user.is_admin) {
+        notifyAdminsOfNewUser(pool, user.email, user.display_name).catch(e =>
+          console.error('Admin registration notification failed:', e)
+        );
+      }
       req.login(user, (err) => {
         if (err) { res.redirect('/login?error=1'); return; }
         res.redirect(user.approved ? '/' : '/pending');
@@ -211,7 +217,8 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
   router.post('/auth/reset-password', async (req: Request, res: Response) => {
     const { token, password } = req.body as { token?: string; password?: string };
     if (!token || !password) { res.redirect('/auth/reset-password?error=invalid'); return; }
-    if (password.length < 8) { res.redirect(`/auth/reset-password?token=${encodeURIComponent(token)}&error=short`); return; }
+    const pwError = validatePasswordComplexity(password);
+    if (pwError) { res.redirect(`/auth/reset-password?token=${encodeURIComponent(token)}&error=weak`); return; }
     const userId = await consumePasswordResetToken(pool, token);
     if (!userId) { res.redirect('/auth/reset-password?error=invalid'); return; }
     const hash = await bcrypt.hash(password, 12);

@@ -75,8 +75,13 @@
     </div>
     <div class="field">
       <label for="password">Password</label>
-      <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••">
-      <p class="hint" id="pw-hint" style="display:none">Minimum 8 characters</p>
+      <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="••••••••" oninput="updatePwHints(this.value)">
+      <div id="pw-hint" style="display:none">
+        <p class="hint" id="hint-len">✗ At least 8 characters</p>
+        <p class="hint" id="hint-upper">✗ One uppercase letter (A–Z)</p>
+        <p class="hint" id="hint-lower">✗ One lowercase letter (a–z)</p>
+        <p class="hint" id="hint-digit">✗ One number (0–9)</p>
+      </div>
       <a href="/auth/forgot-password" class="forgot-link" id="forgot-link">Forgot password?</a>
     </div>
     <button type="submit" class="submit-btn" id="submit-btn">Sign in</button>
@@ -106,8 +111,9 @@
   if (err) {
     var box = document.getElementById('error-box');
     box.style.display = 'block';
-    box.textContent = err === 'taken' ? 'That email is already registered. Try signing in instead.'
+    box.textContent = err === 'taken'   ? 'That email is already registered. Try signing in instead.'
       : err === 'invalid' ? 'Please enter a valid email and a password of at least 8 characters.'
+      : err === 'weak'    ? 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a number.'
       : 'Invalid email or password. Please try again.';
   }
   if (p.get('reset') === '1') {
@@ -125,6 +131,19 @@
   }
 })();
 
+function updatePwHints(val) {
+  function set(id, ok) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = el.textContent.replace(/^[✓✗] /, (ok ? '✓ ' : '✗ '));
+    el.style.color = ok ? 'var(--accent)' : '';
+  }
+  set('hint-len',   val.length >= 8);
+  set('hint-upper', /[A-Z]/.test(val));
+  set('hint-lower', /[a-z]/.test(val));
+  set('hint-digit', /[0-9]/.test(val));
+}
+
 function setMode(mode) {
   var isReg = mode === 'register';
   document.getElementById('btn-signin').classList.toggle('active', !isReg);
@@ -136,6 +155,7 @@ function setMode(mode) {
   document.getElementById('submit-btn').textContent = isReg ? 'Create account' : 'Sign in';
   document.getElementById('pw-hint').style.display = isReg ? 'block' : 'none';
   document.getElementById('forgot-link').style.display = isReg ? 'none' : 'block';
+  if (!isReg) updatePwHints('');
   document.getElementById('password').autocomplete = isReg ? 'new-password' : 'current-password';
 }
 </script>
