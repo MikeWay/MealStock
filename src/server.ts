@@ -183,7 +183,7 @@ async function addWeek(label: string, prevWeek: Week): Promise<number> {
       for (let mi = 0; mi < meals.length; mi++) {
         const m = meals[mi];
         const remainder = Math.max(0,
-          m.start + m.ordered + m.corrections + m.sessions.reduce((a, b) => a + b, 0)
+          m.start + m.ordered + m.corrections - m.sessions.reduce((a, b) => a + b, 0)
         );
         const dRes = await client.query<{ id: number }>(
           `INSERT INTO dishes(week_id,category,sort_order,name,diet,start,ordered,corrections)
@@ -315,7 +315,7 @@ async function deleteWeek(weekDbId: number, state: AppState, deviceIp: string, u
       for (const [cat, dishes] of Object.entries(deletedWeek.cats) as [Category, Dish[]][]) {
         for (let mi = 0; mi < dishes.length; mi++) {
           const d = dishes[mi];
-          const left = Math.max(0, d.start + d.ordered + d.corrections + d.sessions.reduce((a, b) => a + b, 0));
+          const left = Math.max(0, d.start + d.ordered + d.corrections - d.sessions.reduce((a, b) => a + b, 0));
           const nextDish = nextWeek.cats[cat]?.[mi];
           if (nextDish?.dbId) {
             await client.query('UPDATE dishes SET start=$1, updated_at=NOW() WHERE id=$2', [left, nextDish.dbId]);

@@ -355,7 +355,7 @@ function rem(wi, cat, mi) {
   const item = state.weeks[wi]?.cats[cat]?.[mi];
   if (!item) return 0;
   const start = wi > 0 ? rem(wi-1, cat, mi) : (item.start||0);
-  return start + (item.ordered||0) + (item.corrections||0) + item.sessions.reduce((a,b)=>a+b,0);
+  return start + (item.ordered||0) + (item.corrections||0) - item.sessions.reduce((a,b)=>a+b,0);
 }
 
 function weekSummary(wi) {
