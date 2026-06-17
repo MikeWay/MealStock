@@ -7,6 +7,12 @@ import { Pool } from 'pg';
 import { AppUser, createLocalUser, requireAdmin, createPasswordResetToken, consumePasswordResetToken, validatePasswordResetToken, validatePasswordComplexity } from './auth';
 import { sendPasswordResetEmail, notifyAdminsOfNewUser } from './mailer';
 
+const VALID_CATEGORIES = new Set(['Meat', 'Non-Meat', 'Desserts']);
+const SESSIONS = [
+  'Tues Improv', 'Tues Cruisers', 'Wed Diners', 'Wed Dinghies',
+  'Thurs Diners', 'Thurs Juniors', 'Thurs Cruisers', 'Friday',
+];
+
 export interface OAuthProviders {
   google: boolean;
   facebook: boolean;
@@ -26,7 +32,9 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function adminPage(rows: string, weeks: { id: number; label: string }[]): string {
+function adminPage(rows: string, weeks: { id: number; label: string }[], activeWeekId: number): string {
+  const activeIdx = weeks.findIndex(w => w.id === activeWeekId);
+  const futureWeeks = activeIdx >= 0 ? weeks.slice(activeIdx + 1) : weeks.slice(1);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -72,6 +80,38 @@ function adminPage(rows: string, weeks: { id: number; label: string }[]): string
   <button type="submit" class="btn-reject" style="font-size:13px;padding:6px 16px">Reset Session</button>
 </form>
 
+<h2 style="font-size:16px;margin:32px 0 12px">Import Stock Levels</h2>
+<p style="color:var(--text2);margin-bottom:12px;font-size:13px">
+  Upload a CSV with columns: <code>Category, Dish, Dietary Info, Start Number</code>. Matching dishes are updated; unrecognised dishes are created in the target week only.
+</p>
+<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  <select id="importWeekId" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px">
+    ${weeks.map((w, i) => `<option value="${w.id}"${i === weeks.length - 1 ? ' selected' : ''}>${esc(w.label)}</option>`).join('')}
+  </select>
+  <input type="file" id="importFile" accept=".csv" style="font-size:13px;color:var(--text)">
+  <button onclick="doImportStock()" class="btn-approve" style="font-size:13px;padding:6px 16px">Import</button>
+</div>
+<div style="margin-top:8px">
+  <label style="font-size:13px;cursor:pointer">
+    <input type="checkbox" id="importResetWeeks" style="margin-right:6px">
+    Delete all existing weeks before importing (fresh start)
+  </label>
+</div>
+<div id="importResult" style="margin-top:10px;font-size:13px;white-space:pre-wrap"></div>
+
+<h2 style="font-size:16px;margin:32px 0 12px">Delete Week</h2>
+<p style="color:var(--text2);margin-bottom:12px;font-size:13px">
+  Permanently deletes a future week and all its data. Left-over stock figures carry forward to the next week if one exists.
+</p>
+${futureWeeks.length > 0 ? `
+<form method="post" action="/admin/delete-week"
+      onsubmit="return confirm('Delete this week? All data will be permanently discarded.')">
+  <select name="weekId" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px;margin-right:8px">
+    ${futureWeeks.map(w => `<option value="${w.id}">${esc(w.label)}</option>`).join('')}
+  </select>
+  <button type="submit" class="btn-reject" style="font-size:13px;padding:6px 16px">Delete Week</button>
+</form>` : '<p style="color:var(--text2);font-size:13px">No future weeks available to delete.</p>'}
+
 <h2 style="font-size:16px;margin:32px 0 12px">Global Reset</h2>
 <p style="color:var(--text2);margin-bottom:12px;font-size:13px">
   Zeroes start, ordered, corrections and all session values for every dish in every week.
@@ -89,6 +129,31 @@ function adminPage(rows: string, weeks: { id: number; label: string }[]): string
 <button onclick="runSql()" class="btn-approve" style="margin-top:8px;font-size:13px;padding:6px 16px">Run</button>
 <div id="sqlResults" style="margin-top:16px;overflow-x:auto"></div>
 <script>
+async function doImportStock() {
+  const weekId = parseInt(document.getElementById('importWeekId').value);
+  const fileInput = document.getElementById('importFile');
+  const file = fileInput.files[0];
+  const resetWeeks = document.getElementById('importResetWeeks').checked;
+  const out = document.getElementById('importResult');
+  if (!file) { out.style.color='var(--danger)'; out.textContent='Please select a CSV file.'; return; }
+  if (resetWeeks && !confirm('This will DELETE ALL existing weeks and their data before importing. Are you sure?')) return;
+  out.style.color='var(--text2)'; out.textContent='Importing...';
+  try {
+    const csv = await file.text();
+    const r = await fetch('/admin/import-stock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weekId, csv, resetWeeks })
+    });
+    const data = await r.json();
+    if (data.error) { out.style.color='var(--danger)'; out.textContent='Error: ' + data.error; return; }
+    out.style.color='var(--accent)';
+    let msg = 'Updated ' + data.updated + ' dish' + (data.updated!==1?'es':'') + ', created ' + data.created + ' new dish' + (data.created!==1?'es':'') + '.';
+    if (data.errors && data.errors.length) msg += '\\n\\nSkipped rows:\\n' + data.errors.join('\\n');
+    out.textContent = msg;
+    fileInput.value = '';
+  } catch(e) { out.style.color='var(--danger)'; out.textContent='Fetch error: ' + e; }
+}
 async function runSql() {
   const query = document.getElementById('sqlInput').value;
   const out = document.getElementById('sqlResults');
@@ -121,7 +186,184 @@ function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'
 </html>`;
 }
 
-export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router {
+function parseCSVRow(line: string): string[] {
+  const fields: string[] = [];
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === '"') {
+      const end = line.indexOf('"', i + 1);
+      fields.push(end === -1 ? line.slice(i + 1) : line.slice(i + 1, end));
+      i = end === -1 ? line.length : end + 2; // skip closing quote + comma
+    } else {
+      const end = line.indexOf(',', i);
+      fields.push(end === -1 ? line.slice(i) : line.slice(i, end));
+      i = end === -1 ? line.length : end + 1;
+    }
+  }
+  return fields;
+}
+
+async function importStock(
+  pool: Pool,
+  weekId: number,
+  csvText: string,
+  resetWeeks: boolean,
+  deviceIp: string,
+  userName: string
+): Promise<{ updated: number; created: number; errors: string[] }> {
+  const cleaned = csvText.replace(/^﻿/, '');
+  const lines = cleaned.split(/\r?\n|\r/).map(l => l.trim()).filter(l => l.length > 0);
+  const dataLines = lines.filter(l => !parseCSVRow(l)[0]?.trim().toLowerCase().startsWith('category'));
+
+  let updated = 0;
+  let created = 0;
+  const errors: string[] = [];
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (resetWeeks) {
+      // Get the label of the selected week so we can recreate it
+      const weekRes = await client.query<{ label: string }>('SELECT label FROM weeks WHERE id=$1', [weekId]);
+      let weekLabel = weekRes.rows[0]?.label;
+      if (!weekLabel) {
+        const now = new Date();
+        const diff = now.getDay() === 0 ? -6 : 1 - now.getDay();
+        const mon = new Date(now); mon.setDate(now.getDate() + diff);
+        weekLabel = `w/c ${mon.getDate()} ${mon.toLocaleString('en-GB', { month: 'short' })} ${mon.getFullYear()}`;
+      }
+      // Wipe all data and recreate a single fresh week
+      await client.query('DELETE FROM sessions');
+      await client.query('DELETE FROM dishes');
+      await client.query('DELETE FROM weeks');
+      await client.query('DELETE FROM app_settings WHERE key=$1', ['active_week_id']);
+      const newWeekRes = await client.query<{ id: number }>(
+        "INSERT INTO weeks(label, sort_order) VALUES($1, 1) RETURNING id", [weekLabel]
+      );
+      weekId = newWeekRes.rows[0].id;
+      await client.query(
+        "INSERT INTO app_settings(key, value) VALUES('active_week_id', $1)", [String(weekId)]
+      );
+    }
+
+    const existing = await client.query<{ id: number; category: string; name: string; start: number }>(
+      'SELECT id, category, name, start FROM dishes WHERE week_id=$1',
+      [weekId]
+    );
+    const dishMap = new Map<string, { id: number; start: number }>();
+    for (const row of existing.rows) {
+      dishMap.set(`${row.category}::${row.name.toLowerCase()}`, { id: row.id, start: row.start });
+    }
+
+    for (let lineNum = 0; lineNum < dataLines.length; lineNum++) {
+      const fields = parseCSVRow(dataLines[lineNum]);
+      const rawCat = fields[0]?.trim();
+      const catHasValue = rawCat && rawCat.length > 0;
+
+      // When category column is present, use it; when empty, detect from field positions
+      let name: string | undefined;
+      let diet: string;
+      let startVal: number;
+      let normalizedCat: string | undefined;
+
+      if (catHasValue) {
+        normalizedCat = [...VALID_CATEGORIES].find(c => c.toLowerCase() === rawCat.toLowerCase()) ?? rawCat;
+        name = fields[1]?.trim();
+        diet = fields[2]?.trim() ?? '';
+        startVal = parseInt(fields[3]?.trim() ?? '', 10);
+      } else {
+        // No category column — columns are: (empty), Name, Dietary, Start
+        name = fields[1]?.trim();
+        diet = fields[2]?.trim() ?? '';
+        startVal = parseInt(fields[3]?.trim() ?? '', 10);
+      }
+
+      if (!name) { continue; } // skip blank rows silently
+
+      if (isNaN(startVal) || startVal < 0) {
+        errors.push(`Row ${lineNum + 1}: invalid start value for "${name}" (parsed: ${fields.slice(0,4).join(' | ')})`);
+        continue;
+      }
+
+      if (catHasValue && (!normalizedCat || !VALID_CATEGORIES.has(normalizedCat))) {
+        errors.push(`Row ${lineNum + 1}: invalid category "${rawCat}"`);
+        continue;
+      }
+
+      // Build lookup key(s)
+      let matchKey: string | undefined;
+      let match: { id: number; start: number } | undefined;
+
+      if (normalizedCat) {
+        matchKey = `${normalizedCat}::${name.toLowerCase()}`;
+        match = dishMap.get(matchKey);
+      } else {
+        // No category: search across all categories
+        for (const cat of VALID_CATEGORIES) {
+          const candidate = dishMap.get(`${cat}::${name.toLowerCase()}`);
+          if (candidate) {
+            if (match) { match = undefined; matchKey = undefined; break; } // ambiguous
+            match = candidate; matchKey = `${cat}::${name.toLowerCase()}`; normalizedCat = cat;
+          }
+        }
+        if (!match && !matchKey) {
+          errors.push(`Row ${lineNum + 1}: "${name}" not found in any category (cannot create without a category)`);
+          continue;
+        }
+      }
+
+      if (match) {
+        await client.query('UPDATE dishes SET start=$1, updated_at=NOW() WHERE id=$2', [startVal, match.id]);
+        await client.query(
+          `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+           SELECT $1,$2,w.label,$3,$4,'start',$5,$6 FROM weeks w WHERE w.id=$7`,
+          [deviceIp, userName, name, normalizedCat, match.start, startVal, weekId]
+        );
+        updated++;
+      } else {
+        const sortRes = await client.query<{ next: number }>(
+          'SELECT COALESCE(MAX(sort_order),0)+1 AS next FROM dishes WHERE week_id=$1 AND category=$2',
+          [weekId, normalizedCat]
+        );
+        const dRes = await client.query<{ id: number }>(
+          `INSERT INTO dishes(week_id,category,sort_order,name,diet,start,ordered,corrections)
+           VALUES($1,$2,$3,$4,$5,$6,0,0) RETURNING id`,
+          [weekId, normalizedCat, sortRes.rows[0].next, name, diet, startVal]
+        );
+        const dishId = dRes.rows[0].id;
+        for (let si = 0; si < SESSIONS.length; si++) {
+          await client.query(
+            'INSERT INTO sessions(dish_id,session_idx,session_name,used) VALUES($1,$2,$3,0)',
+            [dishId, si, SESSIONS[si]]
+          );
+        }
+        await client.query(
+          `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+           SELECT $1,$2,w.label,$3,$4,'start',NULL,$5 FROM weeks w WHERE w.id=$6`,
+          [deviceIp, userName, name, normalizedCat, startVal, weekId]
+        );
+        created++;
+      }
+    }
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+
+  return { updated, created, errors };
+}
+
+export function createAuthRouter(
+  pool: Pool,
+  providers: OAuthProviders,
+  reloadState: () => Promise<void>,
+  deleteWeekFn: (weekDbId: number, deviceIp: string, userName: string) => Promise<void>
+): Router {
   const router = Router();
 
   router.get('/login', (req: Request, res: Response) => {
@@ -251,15 +493,19 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
   }
 
   router.get('/admin', requireAdmin, async (req: Request, res: Response) => {
-    const [usersResult, weeksResult] = await Promise.all([
+    const [usersResult, weeksResult, settingResult] = await Promise.all([
       pool.query<AppUser & { created_at: string }>(
         'SELECT id, email, display_name, approved, is_admin, created_at FROM users ORDER BY created_at'
       ),
       pool.query<{ id: number; label: string }>(
         'SELECT id, label FROM weeks ORDER BY sort_order'
       ),
+      pool.query<{ value: string }>(
+        "SELECT value FROM app_settings WHERE key='active_week_id'"
+      ),
     ]);
     const weeks = weeksResult.rows;
+    const activeWeekId = parseInt(settingResult.rows[0]?.value ?? '0');
     const me = req.user!.id;
     const rows = usersResult.rows.map(u => {
       const isSelf = u.id === me;
@@ -278,7 +524,7 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
       </tr>`;
     }).join('');
 
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows, weeks));
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows, weeks, activeWeekId));
   });
 
   router.post('/admin/users/:id/approve', requireAdmin, async (req: Request, res: Response) => {
@@ -292,7 +538,7 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
   });
 
   router.post('/admin/reset-session', requireAdmin, async (req: Request, res: Response) => {
-    const weekId = parseInt(req.body.weekId);
+    const weekId = parseInt(req.body.weekId as string);
     if (!weekId) { res.redirect('/admin'); return; }
     const weekRes = await pool.query<{ label: string }>(
       'SELECT label FROM weeks WHERE id=$1', [weekId]
@@ -322,6 +568,19 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
     } finally {
       client.release();
     }
+    reloadState().catch(() => {});
+    res.redirect('/admin');
+  });
+
+  router.post('/admin/delete-week', requireAdmin, async (req: Request, res: Response) => {
+    const weekId = parseInt(req.body.weekId as string);
+    if (!weekId) { res.redirect('/admin'); return; }
+    try {
+      await deleteWeekFn(weekId, req.ip ?? 'unknown', (req.user as AppUser).display_name);
+      await reloadState();
+    } catch (e) {
+      console.error('delete-week error:', (e as Error).message);
+    }
     res.redirect('/admin');
   });
 
@@ -343,7 +602,20 @@ export function createAuthRouter(pool: Pool, providers: OAuthProviders): Router 
     } finally {
       client.release();
     }
+    reloadState().catch(() => {});
     res.redirect('/admin');
+  });
+
+  router.post('/admin/import-stock', requireAdmin, async (req: Request, res: Response) => {
+    const { weekId, csv, resetWeeks } = req.body as { weekId?: number; csv?: string; resetWeeks?: boolean };
+    if ((!weekId && !resetWeeks) || !csv) { res.json({ error: 'csv is required' }); return; }
+    try {
+      const result = await importStock(pool, weekId ?? 0, csv, !!resetWeeks, req.ip ?? 'unknown', (req.user as AppUser).display_name);
+      reloadState().catch(() => {});
+      res.json(result);
+    } catch (e) {
+      res.json({ error: (e as Error).message });
+    }
   });
 
   router.post('/admin/sql', requireAdmin, async (req: Request, res: Response) => {

@@ -355,7 +355,7 @@ function rem(wi, cat, mi) {
   const item = state.weeks[wi]?.cats[cat]?.[mi];
   if (!item) return 0;
   const start = wi > 0 ? rem(wi-1, cat, mi) : (item.start||0);
-  return start + (item.ordered||0) + (item.corrections||0) - item.sessions.reduce((a,b)=>a+b,0);
+  return start + (item.ordered||0) + (item.corrections||0) + item.sessions.reduce((a,b)=>a+b,0);
 }
 
 function weekSummary(wi) {
@@ -389,8 +389,8 @@ function renderSummaryBar() {
 function renderLowStock() {
   if(!state.weeks.length) return;
   const items=[];
-  CATEGORIES.forEach(cat=>(state.weeks[state.activeWeek].cats[cat]||[]).forEach(m=>{
-    const r=rem(m); if(r<=LOW) items.push({name:m.name,r});
+  CATEGORIES.forEach(cat=>(state.weeks[state.activeWeek].cats[cat]||[]).forEach((m,mi)=>{
+    const r=rem(state.activeWeek,cat,mi); if(r<=LOW) items.push({name:m.name,r});
   }));
   const panel=document.getElementById('lowStockPanel');
   if(!items.length){panel.classList.remove('visible');return;}
@@ -404,9 +404,9 @@ function renderSections() {
   const week=state.weeks[state.activeWeek];
   document.getElementById('sections').innerHTML=CATEGORIES.map(cat=>{
     const meals=week.cats[cat]||[];
-    const avail=meals.filter(m=>rem(m)>0).length;
-    const lowC=meals.filter(m=>{const r=rem(m);return r>0&&r<=LOW;}).length;
-    const zeroC=meals.filter(m=>rem(m)<=0).length;
+    const avail=meals.filter((m,mi)=>rem(state.activeWeek,cat,mi)>0).length;
+    const lowC=meals.filter((m,mi)=>{const r=rem(state.activeWeek,cat,mi);return r>0&&r<=LOW;}).length;
+    const zeroC=meals.filter((m,mi)=>rem(state.activeWeek,cat,mi)<=0).length;
     let bClass='badge-ok',bText=`${avail} available`;
     if(zeroC>0){bClass='badge-danger';bText=`${zeroC} out of stock`;}
     else if(lowC>0){bClass='badge-warn';bText=`${lowC} low`;}

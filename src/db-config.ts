@@ -1,11 +1,11 @@
 import type { PoolConfig } from 'pg';
 
 const config: PoolConfig = {
-  host:     'localhost',
-  port:     5432,
-  database: 'mealstock',
-  user:     'postgres',
-  password: 'changeme',   // ← change this to your PostgreSQL password
+  host:     process.env.DB_HOST     || 'localhost',
+  port:     parseInt(process.env.DB_PORT || '5432'),
+  database: process.env.DB_NAME     || 'mealstock',
+  user:     process.env.DB_USER     || 'postgres',
+  password: process.env.DB_PASSWORD || 'changeme',
 };
 
 export default config;

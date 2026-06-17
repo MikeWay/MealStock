@@ -165,6 +165,7 @@ async function saveActiveWeek(weekDbId: number): Promise<void> {
   );
 }
 
+
 async function addWeek(label: string, prevWeek: Week): Promise<number> {
   const client = await pool.connect();
   try {
@@ -182,7 +183,7 @@ async function addWeek(label: string, prevWeek: Week): Promise<number> {
       for (let mi = 0; mi < meals.length; mi++) {
         const m = meals[mi];
         const remainder = Math.max(0,
-          m.start + m.ordered + m.corrections - m.sessions.reduce((a, b) => a + b, 0)
+          m.start + m.ordered + m.corrections + m.sessions.reduce((a, b) => a + b, 0)
         );
         const dRes = await client.query<{ id: number }>(
           `INSERT INTO dishes(week_id,category,sort_order,name,diet,start,ordered,corrections)
@@ -297,6 +298,54 @@ async function resetSessionUsage(
   }
 }
 
+async function deleteWeek(weekDbId: number, state: AppState, deviceIp: string, userName: string): Promise<void> {
+  const weekIdx = state.weeks.findIndex(w => w.dbId === weekDbId);
+  if (weekIdx === -1 || weekIdx <= state.activeWeek) {
+    throw new Error('Only future weeks can be deleted');
+  }
+
+  const deletedWeek = state.weeks[weekIdx];
+  const nextWeek = state.weeks[weekIdx + 1] ?? null;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (nextWeek) {
+      for (const [cat, dishes] of Object.entries(deletedWeek.cats) as [Category, Dish[]][]) {
+        for (let mi = 0; mi < dishes.length; mi++) {
+          const d = dishes[mi];
+          const left = Math.max(0, d.start + d.ordered + d.corrections + d.sessions.reduce((a, b) => a + b, 0));
+          const nextDish = nextWeek.cats[cat]?.[mi];
+          if (nextDish?.dbId) {
+            await client.query('UPDATE dishes SET start=$1, updated_at=NOW() WHERE id=$2', [left, nextDish.dbId]);
+          }
+        }
+      }
+    }
+
+    await client.query(
+      'DELETE FROM sessions WHERE dish_id IN (SELECT id FROM dishes WHERE week_id=$1)',
+      [weekDbId]
+    );
+    await client.query('DELETE FROM dishes WHERE week_id=$1', [weekDbId]);
+    await client.query('DELETE FROM weeks WHERE id=$1', [weekDbId]);
+
+    await client.query(
+      `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+       VALUES($1,$2,$3,'ALL','ALL','WEEK_DELETED',NULL,0)`,
+      [deviceIp, userName, deletedWeek.label]
+    );
+
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 async function getAuditLog(limit = 200): Promise<unknown[]> {
   const res = await pool.query(
     `SELECT id, changed_at, device_ip, user_name, week_label, dish_name, category, field, old_value, new_value
@@ -336,7 +385,18 @@ app.use(express.json());
 app.use(sessionMiddleware);
 app.use(passport.initialize());
 app.use(passport.session());
-app.use(createAuthRouter(pool, providers));
+const reloadState = async (): Promise<void> => {
+  try {
+    cachedState = await loadFullState();
+    broadcast({ type: 'full_state', data: cachedState });
+  } catch (e) {
+    console.error('reloadState error:', (e as Error).message);
+    cachedState = null;
+  }
+};
+app.use(createAuthRouter(pool, providers, reloadState, async (weekDbId, deviceIp, userName) => {
+  await deleteWeek(weekDbId, cachedState!, deviceIp, userName);
+}));
 
 app.get('/', requireAuth, (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8').send(getClientHTML());
@@ -426,6 +486,14 @@ wss.on('connection', async (ws, req) => {
         const orderUpdate = { type: 'cell_update', weekIdx: msg.weekIdx, cat: msg.cat, mi: msg.mi, field: 'ordered', value: dish.ordered };
         broadcast(orderUpdate, ws);
         ws.send(JSON.stringify(orderUpdate));
+
+      } else if (msg.type === 'delete_week') {
+        const week = cachedState!.weeks[msg.weekIdx as number];
+        if (!week) throw new Error('Week not found');
+        await deleteWeek(week.dbId, cachedState!, deviceIp, userName);
+        cachedState = await loadFullState();
+        broadcast({ type: 'full_state', data: cachedState }, ws);
+        ws.send(JSON.stringify({ type: 'full_state', data: cachedState }));
 
       }
 
