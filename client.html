@@ -61,7 +61,7 @@
   .main{max-width:1400px;margin:0 auto;padding:16px}
 
   /* ── Sections ── */
-  .section{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);margin-bottom:14px;overflow:hidden}
+  .section{background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border);margin-bottom:14px;overflow:clip}
   .section-head{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
   .section-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
   .section-icon.meat{background:#fee2e2}.section-icon.nonmeat{background:#dcfce7}.section-icon.desserts{background:#fef3c7}
@@ -78,7 +78,7 @@
   .tbl-wrap{overflow-x:auto}
   table{width:100%;border-collapse:collapse;min-width:800px}
   thead tr{background:var(--surface2)}
-  th{padding:7px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--text3);text-align:center;white-space:nowrap;border-bottom:1px solid var(--border)}
+  th{padding:7px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--text3);text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);position:sticky;top:56px;z-index:10;background:var(--surface2)}
   th.left{text-align:left}
   th.dish-h{width:190px}th.diet-h{width:80px}th.num-h{width:60px}th.rem-h{width:58px}th.session-h{width:62px}
   tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
@@ -427,7 +427,8 @@ function renderTable(cat,meals) {
     const p=s.split(' ');
     return `<th class="session-h">${p[0]}<br><small style="font-weight:400;font-size:10px">${p.slice(1).join(' ')}</small></th>`;
   }).join('');
-  const rows=meals.map((m,mi)=>{
+  const sorted=meals.map((m,mi)=>({m,mi})).sort((a,b)=>a.m.name.localeCompare(b.m.name));
+  const rows=sorted.map(({m,mi})=>{
     const wi=state.activeWeek;
     const r=rem(wi, cat, mi);
     const rowCls=r<=0?'row-danger':r<=LOW?'row-warn':'';
