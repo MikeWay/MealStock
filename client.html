@@ -81,10 +81,12 @@
   .cat-header-inner{display:flex;align-items:center;gap:10px;padding:10px 16px}
 
   /* ── Table ── */
-  .tbl-wrap{overflow-x:auto;overflow-y:clip}
-  table{width:100%;border-collapse:collapse;min-width:800px}
+  .tbl-wrap{overflow-x:auto}
+  .sticky-thead-wrapper{position:sticky;top:0;z-index:11;overflow:hidden;background:var(--surface2)}
+  table{width:100%;border-collapse:collapse;min-width:800px;table-layout:fixed}
+  .audit-table-wrap table{table-layout:auto}
   thead tr{background:var(--surface2)}
-  th{padding:7px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--text3);text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10;background:var(--surface2)}
+  th{padding:7px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--text3);text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);background:var(--surface2)}
   th.left{text-align:left}
   th.dish-h{width:190px}th.diet-h{width:80px}th.num-h{width:60px}th.rem-h{width:58px}th.session-h{width:62px}
   tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
@@ -412,6 +414,7 @@ function renderSections() {
     const p=s.split(' ');
     return `<th class="session-h">${p[0]}<br><small style="font-weight:400;font-size:10px">${p.slice(1).join(' ')}</small></th>`;
   }).join('');
+  const colgroup=`<colgroup><col style="width:190px"><col style="width:80px"><col style="width:60px"><col style="width:60px">${SESSIONS.map(()=>'<col style="width:62px">').join('')}<col style="width:60px"><col style="width:58px"></colgroup>`;
   const catBodies=CATEGORIES.map(cat=>{
     const meals=week.cats[cat]||[];
     const avail=meals.filter((m,mi)=>rem(state.activeWeek,cat,mi)>0).length;
@@ -430,17 +433,18 @@ function renderSections() {
     const dataBody=collapsed[cat]?'':`<tbody>${renderTableRows(cat,meals)}</tbody>`;
     return headerBody+dataBody;
   }).join('');
-  document.getElementById('sections').innerHTML=`<div class="section"><div class="tbl-wrap">
-    <table>
-      <thead><tr>
-        <th class="left dish-h">Dish</th><th class="diet-h">Dietary</th>
-        <th class="num-h">Start</th><th class="num-h">Ordered</th>
-        ${sessionHeaders}
-        <th class="num-h">Corr.</th><th class="rem-h">Left</th>
-      </tr></thead>
-      ${catBodies}
-    </table>
-  </div></div>`;
+  document.getElementById('sections').innerHTML=`<div class="section">
+    <div class="sticky-thead-wrapper"><table>${colgroup}<thead><tr>
+      <th class="left dish-h">Dish</th><th class="diet-h">Dietary</th>
+      <th class="num-h">Start</th><th class="num-h">Ordered</th>
+      ${sessionHeaders}
+      <th class="num-h">Corr.</th><th class="rem-h">Left</th>
+    </tr></thead></table></div>
+    <div class="tbl-wrap"><table>${colgroup}${catBodies}</table></div>
+  </div>`;
+  const wrap=document.querySelector('#sections .tbl-wrap');
+  const hw=document.querySelector('#sections .sticky-thead-wrapper');
+  if(wrap&&hw) wrap.addEventListener('scroll',()=>{hw.scrollLeft=wrap.scrollLeft;});
 }
 
 function renderTableRows(cat,meals) {
