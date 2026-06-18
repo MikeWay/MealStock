@@ -32,7 +32,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function adminPage(rows: string, weeks: { id: number; label: string }[], activeWeekId: number, freezerOptions: { id: number; label: string }[]): string {
+function adminPage(rows: string, weeks: { id: number; label: string }[], activeWeekId: number, freezerOptions: { id: number; label: string }[], users: { id: number; display_name: string; email: string }[]): string {
   const activeIdx = weeks.findIndex(w => w.id === activeWeekId);
   const futureWeeks = activeIdx >= 0 ? weeks.slice(activeIdx + 1) : weeks.slice(1);
   return `<!DOCTYPE html>
@@ -111,6 +111,33 @@ ${futureWeeks.length > 0 ? `
   </select>
   <button type="submit" class="btn-reject" style="font-size:13px;padding:6px 16px">Delete Week</button>
 </form>` : '<p style="color:var(--text2);font-size:13px">No future weeks available to delete.</p>'}
+
+<h2 style="font-size:16px;margin:32px 0 12px">Set User Password</h2>
+<p style="color:var(--text2);margin-bottom:12px;font-size:13px">
+  Set a password for any user. For OAuth-only accounts this creates a local login credential.
+</p>
+<form method="post" action="/admin/set-password" onsubmit="return validateSetPw()">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <select name="userId" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px">
+      ${users.map(u => `<option value="${u.id}">${esc(u.display_name)} (${esc(u.email)})</option>`).join('')}
+    </select>
+    <input type="password" name="password" id="setPwInput" placeholder="New password" required minlength="8"
+      style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px;width:200px">
+    <input type="password" name="confirm" id="setPwConfirm" placeholder="Confirm password" required minlength="8"
+      style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px;width:200px">
+    <button type="submit" class="btn-approve" style="font-size:13px;padding:6px 16px">Set Password</button>
+  </div>
+  <div id="setPwErr" style="color:var(--danger);font-size:12px;margin-top:6px"></div>
+</form>
+<script>
+function validateSetPw(){
+  const pw=document.getElementById('setPwInput').value;
+  const cf=document.getElementById('setPwConfirm').value;
+  const err=document.getElementById('setPwErr');
+  if(pw!==cf){err.textContent='Passwords do not match.';return false;}
+  err.textContent='';return true;
+}
+</script>
 
 <h2 style="font-size:16px;margin:32px 0 12px">Freezer Options</h2>
 <p style="color:var(--text2);margin-bottom:12px;font-size:13px">
@@ -533,6 +560,9 @@ export function createAuthRouter(
       const actions = isSelf ? '<span style="color:var(--text2);font-size:12px">(you)</span>' : `
         <div class="actions">
           ${!u.approved ? `<form method="post" action="/admin/users/${u.id}/approve"><button class="btn-approve">Approve</button></form>` : ''}
+          ${!u.is_admin
+            ? `<form method="post" action="/admin/users/${u.id}/promote"><button class="btn-approve">Make Admin</button></form>`
+            : `<form method="post" action="/admin/users/${u.id}/demote" onsubmit="return confirm('Remove admin role from ${esc(u.email)}?')"><button class="btn-reject">Demote</button></form>`}
           <form method="post" action="/admin/users/${u.id}/reject" onsubmit="return confirm('Remove ${esc(u.email)}?')"><button class="btn-reject">Remove</button></form>
         </div>`;
       return `<tr>
@@ -545,7 +575,7 @@ export function createAuthRouter(
       </tr>`;
     }).join('');
 
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows, weeks, activeWeekId, freezerResult.rows));
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows, weeks, activeWeekId, freezerResult.rows, usersResult.rows));
   });
 
   router.post('/admin/users/:id/approve', requireAdmin, async (req: Request, res: Response) => {
@@ -556,6 +586,31 @@ export function createAuthRouter(
   router.post('/admin/users/:id/reject', requireAdmin, async (req: Request, res: Response) => {
     await pool.query('DELETE FROM users WHERE id=$1 AND id!=$2', [req.params.id, req.user!.id]);
     res.redirect('/admin');
+  });
+
+  router.post('/admin/users/:id/promote', requireAdmin, async (req: Request, res: Response) => {
+    await pool.query('UPDATE users SET is_admin=true WHERE id=$1', [req.params.id]);
+    res.redirect('/admin');
+  });
+
+  router.post('/admin/users/:id/demote', requireAdmin, async (req: Request, res: Response) => {
+    const adminCount = await pool.query<{ count: string }>('SELECT COUNT(*)::text as count FROM users WHERE is_admin=true');
+    if (parseInt(adminCount.rows[0].count) <= 1) {
+      res.redirect('/admin?error=last-admin');
+      return;
+    }
+    await pool.query('UPDATE users SET is_admin=false WHERE id=$1 AND id!=$2', [req.params.id, req.user!.id]);
+    res.redirect('/admin');
+  });
+
+  router.post('/admin/set-password', requireAdmin, async (req: Request, res: Response) => {
+    const { userId, password } = req.body as { userId: string; password: string };
+    if (!userId || !password) { res.redirect('/admin?error=missing'); return; }
+    const pwError = validatePasswordComplexity(password);
+    if (pwError) { res.redirect('/admin?error=weak'); return; }
+    const hash = await bcrypt.hash(password, 12);
+    await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, userId]);
+    res.redirect('/admin?success=password');
   });
 
   router.post('/admin/reset-session', requireAdmin, async (req: Request, res: Response) => {
