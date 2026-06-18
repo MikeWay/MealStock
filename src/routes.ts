@@ -32,7 +32,7 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function adminPage(rows: string, weeks: { id: number; label: string }[], activeWeekId: number): string {
+function adminPage(rows: string, weeks: { id: number; label: string }[], activeWeekId: number, freezerOptions: { id: number; label: string }[]): string {
   const activeIdx = weeks.findIndex(w => w.id === activeWeekId);
   const futureWeeks = activeIdx >= 0 ? weeks.slice(activeIdx + 1) : weeks.slice(1);
   return `<!DOCTYPE html>
@@ -111,6 +111,24 @@ ${futureWeeks.length > 0 ? `
   </select>
   <button type="submit" class="btn-reject" style="font-size:13px;padding:6px 16px">Delete Week</button>
 </form>` : '<p style="color:var(--text2);font-size:13px">No future weeks available to delete.</p>'}
+
+<h2 style="font-size:16px;margin:32px 0 12px">Freezer Options</h2>
+<p style="color:var(--text2);margin-bottom:12px;font-size:13px">
+  Define the freezer labels available in the dropdown on the stock table.
+</p>
+${freezerOptions.length
+  ? freezerOptions.map(f => `<form method="post" action="/admin/freezer-options/delete"
+      style="display:inline-block;margin:0 6px 6px 0"
+      onsubmit="return confirm('Delete freezer option?')">
+    <input type="hidden" name="id" value="${f.id}">
+    <button type="submit" class="btn-reject" style="font-size:12px;padding:3px 10px">${esc(f.label)} ✕</button>
+  </form>`).join('')
+  : '<p style="color:var(--text2);font-size:13px;margin-bottom:10px">No options defined yet.</p>'}
+<form method="post" action="/admin/freezer-options/add" style="margin-top:10px;display:flex;gap:8px;align-items:center">
+  <input type="text" name="label" required maxlength="40" placeholder="e.g. Freezer 1"
+    style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--text);font-size:13px">
+  <button type="submit" class="btn-approve" style="font-size:13px;padding:6px 16px">Add Option</button>
+</form>
 
 <h2 style="font-size:16px;margin:32px 0 12px">Global Reset</h2>
 <p style="color:var(--text2);margin-bottom:12px;font-size:13px">
@@ -493,7 +511,7 @@ export function createAuthRouter(
   }
 
   router.get('/admin', requireAdmin, async (req: Request, res: Response) => {
-    const [usersResult, weeksResult, settingResult] = await Promise.all([
+    const [usersResult, weeksResult, settingResult, freezerResult] = await Promise.all([
       pool.query<AppUser & { created_at: string }>(
         'SELECT id, email, display_name, approved, is_admin, created_at FROM users ORDER BY created_at'
       ),
@@ -502,6 +520,9 @@ export function createAuthRouter(
       ),
       pool.query<{ value: string }>(
         "SELECT value FROM app_settings WHERE key='active_week_id'"
+      ),
+      pool.query<{ id: number; label: string }>(
+        'SELECT id, label FROM freezer_options ORDER BY sort_order, label'
       ),
     ]);
     const weeks = weeksResult.rows;
@@ -524,7 +545,7 @@ export function createAuthRouter(
       </tr>`;
     }).join('');
 
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows, weeks, activeWeekId));
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(adminPage(rows, weeks, activeWeekId, freezerResult.rows));
   });
 
   router.post('/admin/users/:id/approve', requireAdmin, async (req: Request, res: Response) => {
@@ -616,6 +637,26 @@ export function createAuthRouter(
     } catch (e) {
       res.json({ error: (e as Error).message });
     }
+  });
+
+  router.post('/admin/freezer-options/add', requireAdmin, async (req: Request, res: Response) => {
+    const label = ((req.body.label as string) ?? '').trim();
+    if (!label) { res.redirect('/admin'); return; }
+    await pool.query(
+      `INSERT INTO freezer_options(label, sort_order)
+       VALUES($1, (SELECT COALESCE(MAX(sort_order)+1, 0) FROM freezer_options))
+       ON CONFLICT(label) DO NOTHING`,
+      [label]
+    );
+    reloadState().catch(() => {});
+    res.redirect('/admin');
+  });
+
+  router.post('/admin/freezer-options/delete', requireAdmin, async (req: Request, res: Response) => {
+    const id = parseInt(req.body.id as string);
+    if (id) await pool.query('DELETE FROM freezer_options WHERE id=$1', [id]);
+    reloadState().catch(() => {});
+    res.redirect('/admin');
   });
 
   router.post('/admin/sql', requireAdmin, async (req: Request, res: Response) => {

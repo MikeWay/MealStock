@@ -88,7 +88,9 @@
   thead tr{background:var(--surface2)}
   th{padding:7px 8px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;color:var(--text3);text-align:center;white-space:nowrap;border-bottom:1px solid var(--border);background:var(--surface2)}
   th.left{text-align:left}
-  th.dish-h{width:190px}th.diet-h{width:80px}th.num-h{width:60px}th.rem-h{width:58px}th.session-h{width:62px}
+  th.dish-h{width:190px}th.diet-h{width:80px}th.freezer-h{width:90px}th.num-h{width:60px}th.rem-h{width:58px}th.session-h{width:62px}
+  select.freezer-sel{width:82px;height:30px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;font-family:inherit;padding:0 4px;cursor:pointer}
+  select.freezer-sel:focus{outline:none;border-color:var(--accent)}
   tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
   tbody tr:last-child{border-bottom:none}
   tbody tr:hover{background:var(--surface2)}
@@ -315,7 +317,7 @@ const CAT_ICONS  = {Meat:'🍖','Non-Meat':'🥦',Desserts:'🍮'};
 const CAT_CLASS  = {Meat:'meat','Non-Meat':'nonmeat',Desserts:'desserts'};
 const LOW        = 3;
 
-let state            = {activeWeek:0, weeks:[]};
+let state            = {activeWeek:0, weeks:[], freezerOptions:[]};
 let collapsed        = {};
 let auditData        = [];
 let auditVisible     = false;
@@ -345,6 +347,15 @@ function connectWS() {
     } else if (msg.type === 'set_active_week') {
       state.activeWeek = msg.weekIdx;
       renderTabs(); renderSections(); renderSummaryBar(); renderLowStock();
+    } else if (msg.type === 'update_freezer') {
+      const {weekIdx,cat,mi,value} = msg;
+      const item = state.weeks[weekIdx]?.cats[cat]?.[mi];
+      if (!item) return;
+      item.freezer = value;
+      if (weekIdx === state.activeWeek) {
+        const el = document.getElementById(`inp-${cat}-${mi}-freezer`);
+        if (el) el.value = value;
+      }
     } else if (msg.type === 'error') {
       showToast('Server error: ' + msg.message);
     }
@@ -414,7 +425,7 @@ function renderSections() {
     const p=s.split(' ');
     return `<th class="session-h">${p[0]}<br><small style="font-weight:400;font-size:10px">${p.slice(1).join(' ')}</small></th>`;
   }).join('');
-  const colgroup=`<colgroup><col style="width:190px"><col style="width:80px"><col style="width:60px"><col style="width:60px">${SESSIONS.map(()=>'<col style="width:62px">').join('')}<col style="width:60px"><col style="width:58px"></colgroup>`;
+  const colgroup=`<colgroup><col style="width:190px"><col style="width:80px"><col style="width:90px"><col style="width:60px"><col style="width:60px">${SESSIONS.map(()=>'<col style="width:62px">').join('')}<col style="width:60px"><col style="width:58px"></colgroup>`;
   const catBodies=CATEGORIES.map(cat=>{
     const meals=week.cats[cat]||[];
     const avail=meals.filter((m,mi)=>rem(state.activeWeek,cat,mi)>0).length;
@@ -424,7 +435,7 @@ function renderSections() {
     if(zeroC>0){bClass='badge-danger';bText=`${zeroC} out of stock`;}
     else if(lowC>0){bClass='badge-warn';bText=`${lowC} low`;}
     const headerBody=`<tbody><tr class="cat-header-row" onclick="toggleSection('${cat}')">
-      <td colspan="14"><div class="cat-header-inner">
+      <td colspan="15"><div class="cat-header-inner">
         <div class="section-icon ${CAT_CLASS[cat]}">${CAT_ICONS[cat]}</div>
         <span class="section-title">${cat}</span>
         <div class="section-meta"><span class="badge ${bClass}">${bText}</span><span class="chevron${collapsed[cat]?'':' open'}">▼</span></div>
@@ -436,6 +447,7 @@ function renderSections() {
   document.getElementById('sections').innerHTML=`<div class="section">
     <div class="sticky-thead-wrapper"><table>${colgroup}<thead><tr>
       <th class="left dish-h">Dish</th><th class="diet-h">Dietary</th>
+      <th class="freezer-h">Freezer</th>
       <th class="num-h">Start</th><th class="num-h">Ordered</th>
       ${sessionHeaders}
       <th class="num-h">Corr.</th><th class="rem-h">Left</th>
@@ -462,9 +474,12 @@ function renderTableRows(cat,meals) {
     const startCell=wi>0
       ?`<td class="num-cell"><input id="inp-${cat}-${mi}-start" type="number" value="${derivedStart}" readonly data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="start" class="derived-start"></td>`
       :`<td class="num-cell"><input id="inp-${cat}-${mi}-start" type="number" value="${m.start}" min="0" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="start" onchange="handleInput(this)"></td>`;
+    const freezerOpts=state.freezerOptions.map(f=>`<option value="${f}"${m.freezer===f?' selected':''}>${f}</option>`).join('');
+    const freezerCell=`<td class="num-cell"><select id="inp-${cat}-${mi}-freezer" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" onchange="handleFreezerChange(this)" class="freezer-sel"><option value="">—</option>${freezerOpts}</select></td>`;
     return `<tr class="${rowCls}" id="row-${cat}-${mi}">
       <td class="dish-name" title="${m.name}"><span>${m.name}</span></td>
       <td class="diet-cell">${m.diet||'—'}</td>
+      ${freezerCell}
       ${startCell}
       <td class="num-cell"><input id="inp-${cat}-${mi}-ordered" type="number" value="${m.ordered}" min="0" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="ordered" onchange="handleInput(this)" class="${m.ordered>0?'positive':''}"></td>
       ${sessionCells}
@@ -486,6 +501,13 @@ function handleInput(el) {
     : (value<0?'negative':value>0?'positive':'');
   updateRemCell(cat,mi); renderSummaryBar(); renderLowStock();
   send({type:'cell_update',weekIdx:wi,cat,mi,field,si,value});
+  flashSaved();
+}
+
+function handleFreezerChange(el) {
+  const cat=el.dataset.cat, mi=parseInt(el.dataset.mi), wi=parseInt(el.dataset.wi);
+  state.weeks[wi].cats[cat][mi].freezer=el.value;
+  send({type:'update_freezer',weekIdx:wi,cat,mi,value:el.value});
   flashSaved();
 }
 
@@ -680,6 +702,19 @@ function showToast(msg) {
 
 // ── Boot ───────────────────────────────────────────────────────────
 connectWS();
+
+let serverVersion=null;
+async function checkVersion(){
+  try{
+    const r=await fetch('/version');
+    if(!r.ok) return;
+    const {version}=await r.json();
+    if(serverVersion===null){serverVersion=version;return;}
+    if(version!==serverVersion) location.reload();
+  }catch{}
+}
+setInterval(checkVersion,60000);
+checkVersion();
 </script>
 </body>
 </html>

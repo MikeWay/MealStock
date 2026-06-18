@@ -86,6 +86,14 @@ async function setup(): Promise<void> {
 
       ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS user_name TEXT;
 
+      ALTER TABLE dishes ADD COLUMN IF NOT EXISTS freezer TEXT NOT NULL DEFAULT '';
+
+      CREATE TABLE IF NOT EXISTS freezer_options (
+        id         SERIAL PRIMARY KEY,
+        label      TEXT NOT NULL UNIQUE,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+
       CREATE TABLE IF NOT EXISTS password_reset_tokens (
         id         SERIAL PRIMARY KEY,
         user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

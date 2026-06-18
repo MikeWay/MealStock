@@ -14,6 +14,7 @@ import { AppUser, configurePassport, requireAuth } from './auth';
 import { createAuthRouter, OAuthProviders } from './routes';
 
 const PORT = parseInt(process.env.PORT || '3000');
+const SERVER_STARTED_AT = Date.now();
 const pool = new Pool(cfg);
 
 const SESSIONS = [
@@ -28,6 +29,7 @@ interface Dish {
   dbId: number;
   name: string;
   diet: string;
+  freezer: string;
   start: number;
   ordered: number;
   corrections: number;
@@ -45,6 +47,7 @@ interface Week {
 interface AppState {
   activeWeek: number;
   weeks: Week[];
+  freezerOptions: string[];
 }
 
 interface CellUpdateMsg {
@@ -66,15 +69,18 @@ async function loadFullState(): Promise<AppState> {
     );
     const dishesRes = await client.query<{
       id: number; week_id: number; category: string;
-      name: string; diet: string; start: number; ordered: number; corrections: number;
+      name: string; diet: string; freezer: string; start: number; ordered: number; corrections: number;
     }>(
-      'SELECT id, week_id, category, sort_order, name, diet, start, ordered, corrections FROM dishes ORDER BY sort_order, id'
+      'SELECT id, week_id, category, sort_order, name, diet, freezer, start, ordered, corrections FROM dishes ORDER BY sort_order, id'
     );
     const sessionsRes = await client.query<{ dish_id: number; session_idx: number; used: number }>(
       'SELECT dish_id, session_idx, used FROM sessions ORDER BY session_idx'
     );
     const settingRes = await client.query<{ value: string }>(
       "SELECT value FROM app_settings WHERE key='active_week_id'"
+    );
+    const freezerRes = await client.query<{ label: string }>(
+      'SELECT label FROM freezer_options ORDER BY sort_order, label'
     );
 
     const sessionsByDish: Record<number, number[]> = {};
@@ -96,6 +102,7 @@ async function loadFullState(): Promise<AppState> {
         dbId:        d.id,
         name:        d.name,
         diet:        d.diet,
+        freezer:     d.freezer,
         start:       d.start,
         ordered:     d.ordered,
         corrections: d.corrections,
@@ -108,7 +115,7 @@ async function loadFullState(): Promise<AppState> {
     let activeWeek = weeks.findIndex(w => w.dbId === activeWeekDbId);
     if (activeWeek < 0) activeWeek = 0;
 
-    return { activeWeek, weeks };
+    return { activeWeek, weeks, freezerOptions: freezerRes.rows.map(r => r.label) };
   } finally {
     client.release();
   }
@@ -186,9 +193,9 @@ async function addWeek(label: string, prevWeek: Week): Promise<number> {
           m.start + m.ordered + m.corrections - m.sessions.reduce((a, b) => a + b, 0)
         );
         const dRes = await client.query<{ id: number }>(
-          `INSERT INTO dishes(week_id,category,sort_order,name,diet,start,ordered,corrections)
-           VALUES($1,$2,$3,$4,$5,$6,0,0) RETURNING id`,
-          [weekId, cat, mi, m.name, m.diet, remainder]
+          `INSERT INTO dishes(week_id,category,sort_order,name,diet,freezer,start,ordered,corrections)
+           VALUES($1,$2,$3,$4,$5,$6,$7,0,0) RETURNING id`,
+          [weekId, cat, mi, m.name, m.diet, m.freezer, remainder]
         );
         const dishId = dRes.rows[0].id;
         for (let si = 0; si < SESSIONS.length; si++) {
@@ -223,8 +230,8 @@ async function addDish(
         [weekId, cat]
       );
       const dRes = await client.query<{ id: number }>(
-        `INSERT INTO dishes(week_id,category,sort_order,name,diet,start,ordered,corrections)
-         VALUES($1,$2,$3,$4,$5,$6,0,0) RETURNING id`,
+        `INSERT INTO dishes(week_id,category,sort_order,name,diet,freezer,start,ordered,corrections)
+         VALUES($1,$2,$3,$4,$5,'',$6,0,0) RETURNING id`,
         [weekId, cat, sortRes.rows[0].next, name, diet, startQty]
       );
       const dishId = dRes.rows[0].id;
@@ -402,6 +409,10 @@ app.get('/', requireAuth, (_req: Request, res: Response) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8').send(getClientHTML());
 });
 
+app.get('/version', requireAuth, (_req: Request, res: Response) => {
+  res.json({ version: SERVER_STARTED_AT });
+});
+
 app.get('/audit', requireAuth, async (_req: Request, res: Response) => {
   try {
     const rows = await getAuditLog(500);
@@ -494,6 +505,16 @@ wss.on('connection', async (ws, req) => {
         cachedState = await loadFullState();
         broadcast({ type: 'full_state', data: cachedState }, ws);
         ws.send(JSON.stringify({ type: 'full_state', data: cachedState }));
+
+      } else if (msg.type === 'update_freezer') {
+        const dish = cachedState!.weeks[msg.weekIdx]?.cats[msg.cat as Category]?.[msg.mi];
+        if (!dish) throw new Error('Dish not found');
+        await pool.query(
+          'UPDATE dishes SET freezer=$1, updated_at=NOW() WHERE id=$2',
+          [msg.value, dish.dbId]
+        );
+        dish.freezer = msg.value as string;
+        broadcast({ type: 'update_freezer', weekIdx: msg.weekIdx, cat: msg.cat, mi: msg.mi, value: msg.value }, ws);
 
       }
 
