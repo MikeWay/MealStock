@@ -15,6 +15,10 @@ import { createAuthRouter, OAuthProviders } from './routes';
 
 const PORT = parseInt(process.env.PORT || '3000');
 const SERVER_STARTED_AT = Date.now();
+const APP_VERSION = (() => {
+  try { return (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }).version; }
+  catch { return '0.0.0'; }
+})();
 const pool = new Pool(cfg);
 
 const SESSIONS = [
@@ -410,7 +414,7 @@ app.get('/', requireAuth, (_req: Request, res: Response) => {
 });
 
 app.get('/version', requireAuth, (_req: Request, res: Response) => {
-  res.json({ version: SERVER_STARTED_AT });
+  res.json({ version: SERVER_STARTED_AT, appVersion: APP_VERSION });
 });
 
 app.get('/audit', requireAuth, async (_req: Request, res: Response) => {
