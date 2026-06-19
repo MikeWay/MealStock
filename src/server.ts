@@ -357,6 +357,32 @@ async function deleteWeek(weekDbId: number, state: AppState, deviceIp: string, u
   }
 }
 
+async function deleteDish(name: string, cat: Category, deviceIp: string, userName: string): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const res = await client.query<{ week_id: number }>(
+      'DELETE FROM dishes WHERE name=$1 AND category=$2 RETURNING week_id',
+      [name, cat]
+    );
+    for (const row of res.rows) {
+      const weekRes = await client.query<{ label: string }>('SELECT label FROM weeks WHERE id=$1', [row.week_id]);
+      const weekLabel = weekRes.rows[0]?.label ?? 'unknown';
+      await client.query(
+        `INSERT INTO audit_log(device_ip, user_name, week_label, dish_name, category, field, old_value, new_value)
+         VALUES($1,$2,$3,$4,$5,'DISH_DELETED',NULL,0)`,
+        [deviceIp, userName, weekLabel, name, cat]
+      );
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 async function getAuditLog(limit = 200): Promise<unknown[]> {
   const res = await pool.query(
     `SELECT id, changed_at, device_ip, user_name, week_label, dish_name, category, field, old_value, new_value
@@ -409,8 +435,11 @@ app.use(createAuthRouter(pool, providers, reloadState, async (weekDbId, deviceIp
   await deleteWeek(weekDbId, cachedState!, deviceIp, userName);
 }));
 
-app.get('/', requireAuth, (_req: Request, res: Response) => {
-  res.setHeader('Content-Type', 'text/html; charset=utf-8').send(getClientHTML());
+app.get('/', requireAuth, (req: Request, res: Response) => {
+  const user = req.user!;
+  const script = `<script>window.__USER__=${JSON.stringify({ is_admin: user.is_admin, display_name: user.display_name })};</script>`;
+  const html = getClientHTML().replace('</head>', `${script}\n</head>`);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
 app.get('/version', requireAuth, (_req: Request, res: Response) => {
@@ -506,6 +535,15 @@ wss.on('connection', async (ws, req) => {
         const week = cachedState!.weeks[msg.weekIdx as number];
         if (!week) throw new Error('Week not found');
         await deleteWeek(week.dbId, cachedState!, deviceIp, userName);
+        cachedState = await loadFullState();
+        broadcast({ type: 'full_state', data: cachedState }, ws);
+        ws.send(JSON.stringify({ type: 'full_state', data: cachedState }));
+
+      } else if (msg.type === 'delete_dish') {
+        if (!user?.is_admin) throw new Error('Admin only');
+        const dish = cachedState!.weeks[msg.weekIdx]?.cats[msg.cat as Category]?.[msg.mi];
+        if (!dish) throw new Error('Dish not found');
+        await deleteDish(dish.name, msg.cat as Category, deviceIp, userName);
         cachedState = await loadFullState();
         broadcast({ type: 'full_state', data: cachedState }, ws);
         ws.send(JSON.stringify({ type: 'full_state', data: cachedState }));

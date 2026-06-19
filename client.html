@@ -102,6 +102,9 @@
   td.diet-cell{font-size:11px;color:var(--text3);text-align:center}
   td.num-cell{text-align:center}
   td.rem-cell{text-align:center;font-size:14px;font-weight:700}
+  th.del-h,td.del-cell{width:28px;padding:0 2px;text-align:center}
+  .del-dish-btn{background:none;border:none;color:var(--danger);cursor:pointer;font-size:13px;padding:2px 4px;opacity:0.35;line-height:1}
+  .del-dish-btn:hover{opacity:1}
   .rem-ok{color:var(--accent)}.rem-warn{color:var(--warn)}.rem-danger{color:var(--danger)}
 
   /* ── Inputs ── */
@@ -318,6 +321,7 @@ const CAT_ICONS  = {Meat:'🍖','Non-Meat':'🥦',Desserts:'🍮'};
 const CAT_CLASS  = {Meat:'meat','Non-Meat':'nonmeat',Desserts:'desserts'};
 const LOW        = 3;
 
+const isAdmin        = !!(window.__USER__ && window.__USER__.is_admin);
 let state            = {activeWeek:0, weeks:[], freezerOptions:[]};
 let collapsed        = {};
 let auditData        = [];
@@ -452,6 +456,7 @@ function renderSections() {
       <th class="num-h">Start</th><th class="num-h">Ordered</th>
       ${sessionHeaders}
       <th class="num-h">Corr.</th><th class="rem-h">Left</th>
+      ${isAdmin?'<th class="del-h"></th>':''}
     </tr></thead></table></div>
     <div class="tbl-wrap"><table>${colgroup}${catBodies}</table></div>
   </div>`;
@@ -486,6 +491,7 @@ function renderTableRows(cat,meals) {
       ${sessionCells}
       <td class="num-cell"><input id="inp-${cat}-${mi}-corrections" type="number" value="${m.corrections}" data-wi="${wi}" data-cat="${cat}" data-mi="${mi}" data-field="corrections" onchange="handleInput(this)"></td>
       <td class="rem-cell ${remCls}" id="rem-${cat}-${mi}">${r}</td>
+      ${isAdmin?`<td class="del-cell"><button class="del-dish-btn" onclick="deleteDish(${wi},'${cat}',${mi})" title="Delete dish from all weeks">✕</button></td>`:''}
     </tr>`;
   }).join('');
 }
@@ -576,6 +582,13 @@ function submitOrder() {
 }
 
 function openAddDish(){openModal('addDishModal');}
+
+function deleteDish(wi, cat, mi) {
+  const item = state.weeks[wi]?.cats[cat]?.[mi];
+  if (!item) return;
+  if (!confirm(`Delete "${item.name}" from all weeks? This cannot be undone.`)) return;
+  send({type:'delete_dish', weekIdx:wi, cat, mi});
+}
 
 function submitAddDish() {
   const name=document.getElementById('newDishName').value.trim();
