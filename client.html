@@ -430,7 +430,7 @@ function renderSections() {
     const p=s.split(' ');
     return `<th class="session-h">${p[0]}<br><small style="font-weight:400;font-size:10px">${p.slice(1).join(' ')}</small></th>`;
   }).join('');
-  const colgroup=`<colgroup><col style="width:190px"><col style="width:80px"><col style="width:90px"><col style="width:60px"><col style="width:60px">${SESSIONS.map(()=>'<col style="width:62px">').join('')}<col style="width:60px"><col style="width:58px"></colgroup>`;
+  const colgroup=`<colgroup><col style="width:190px"><col style="width:80px"><col style="width:90px"><col style="width:60px"><col style="width:60px">${SESSIONS.map(()=>'<col style="width:62px">').join('')}<col style="width:60px"><col style="width:58px">${isAdmin?'<col style="width:28px">':''}</colgroup>`;
   const catBodies=CATEGORIES.map(cat=>{
     const meals=week.cats[cat]||[];
     const avail=meals.filter((m,mi)=>rem(state.activeWeek,cat,mi)>0).length;
