@@ -42,6 +42,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       PORT: 3000
+      BASE_PATH: ""
       SESSION_SECRET: ${SESSION_SECRET:-dev-secret-change-me}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
@@ -60,6 +61,16 @@ services:
     depends_on:
       setup:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  nginx:
+    build: ./nginx
+    ports:
+      - "80:80"
+    networks:
+      - mealnet
+    depends_on:
+      - app
     restart: unless-stopped
 
 volumes:

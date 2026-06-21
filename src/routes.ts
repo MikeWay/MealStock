@@ -403,25 +403,31 @@ async function importStock(
   return { updated, created, errors };
 }
 
+function injectBasePath(html: string, basePath: string): string {
+  const script = `<script>window.__BASE_PATH__=${JSON.stringify(basePath)};document.addEventListener('DOMContentLoaded',function(){var base=window.__BASE_PATH__||'';if(!base)return;document.querySelectorAll('form[action^="/"]').forEach(function(f){f.setAttribute('action',base+f.getAttribute('action'));});document.querySelectorAll('a[href^="/"]').forEach(function(a){a.setAttribute('href',base+a.getAttribute('href'));});});</script>`;
+  return html.replace('</head>', `${script}\n</head>`);
+}
+
 export function createAuthRouter(
   pool: Pool,
   providers: OAuthProviders,
   reloadState: () => Promise<void>,
+  basePath: string,
   deleteWeekFn: (weekDbId: number, deviceIp: string, userName: string) => Promise<void>
 ): Router {
   const router = Router();
 
   router.get('/login', (req: Request, res: Response) => {
-    if (req.isAuthenticated() && req.user!.approved) { res.redirect('/'); return; }
+    if (req.isAuthenticated() && req.user!.approved) { res.redirect(`${basePath}/`); return; }
     const script = `<script>window.__OAUTH__=${JSON.stringify(providers)};</script>`;
-    const html = readFile('login.html').replace('</head>', `${script}\n</head>`);
+    const html = injectBasePath(readFile('login.html').replace('</head>', `${script}\n</head>`), basePath);
     res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
   });
 
   router.get('/pending', (req: Request, res: Response) => {
-    if (!req.isAuthenticated()) { res.redirect('/login'); return; }
-    if (req.user!.approved) { res.redirect('/'); return; }
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(readFile('pending.html'));
+    if (!req.isAuthenticated()) { res.redirect(`${basePath}/login`); return; }
+    if (req.user!.approved) { res.redirect(`${basePath}/`); return; }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(injectBasePath(readFile('pending.html'), basePath));
   });
 
   router.post('/auth/register', async (req: Request, res: Response) => {
@@ -442,34 +448,34 @@ export function createAuthRouter(
         );
       }
       req.login(user, (err) => {
-        if (err) { res.redirect('/login?error=1'); return; }
-        res.redirect(user.approved ? '/' : '/pending');
+        if (err) { res.redirect(`${basePath}/login?error=1`); return; }
+        res.redirect(user.approved ? `${basePath}/` : `${basePath}/pending`);
       });
     } catch {
-      res.redirect('/login?error=taken');
+      res.redirect(`${basePath}/login?error=taken`);
     }
   });
 
   router.post('/auth/login',
-    passport.authenticate('local', { failureRedirect: '/login?error=1' }),
+    passport.authenticate('local', { failureRedirect: `${basePath}/login?error=1` }),
     (req: Request, res: Response) => {
-      res.redirect(req.user!.approved ? '/' : '/pending');
+      res.redirect(req.user!.approved ? `${basePath}/` : `${basePath}/pending`);
     }
   );
 
   router.post('/auth/logout', (req: Request, res: Response) => {
     req.logout(() => {
-      req.session.destroy(() => res.redirect('/login'));
+      req.session.destroy(() => res.redirect(`${basePath}/login`));
     });
   });
 
   router.get('/auth/forgot-password', (req: Request, res: Response) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(readFile('forgot-password.html'));
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(injectBasePath(readFile('forgot-password.html'), basePath));
   });
 
   router.post('/auth/forgot-password', async (req: Request, res: Response) => {
     const { email } = req.body as { email?: string };
-    if (!email) { res.redirect('/auth/forgot-password?sent=1'); return; }
+    if (!email) { res.redirect(`${basePath}/auth/forgot-password?sent=1`); return; }
     try {
       const user = await pool.query<{ id: number; password_hash: string | null }>(
         'SELECT id, password_hash FROM users WHERE email=$1',
@@ -478,62 +484,62 @@ export function createAuthRouter(
       const u = user.rows[0];
       if (u && u.password_hash) {
         const token = await createPasswordResetToken(pool, u.id);
-        const base = process.env.APP_BASE_URL || 'http://localhost:3000';
-        await sendPasswordResetEmail(email, `${base}/auth/reset-password?token=${token}`);
+        const appBase = process.env.APP_BASE_URL || 'http://localhost:3000';
+        await sendPasswordResetEmail(email, `${appBase}${basePath}/auth/reset-password?token=${token}`);
       }
     } catch (e) {
       console.error('Password reset email error:', e);
     }
-    res.redirect('/auth/forgot-password?sent=1');
+    res.redirect(`${basePath}/auth/forgot-password?sent=1`);
   });
 
   router.get('/auth/reset-password', async (req: Request, res: Response) => {
     const token = typeof req.query.token === 'string' ? req.query.token : '';
     // No token means we're showing an error page (e.g. after ?error=invalid redirect) — serve as-is
     if (!token) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8').send(readFile('reset-password.html'));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8').send(injectBasePath(readFile('reset-password.html'), basePath));
       return;
     }
     if (!(await validatePasswordResetToken(pool, token))) {
-      res.redirect('/auth/reset-password?error=invalid');
+      res.redirect(`${basePath}/auth/reset-password?error=invalid`);
       return;
     }
-    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(readFile('reset-password.html'));
+    res.setHeader('Content-Type', 'text/html; charset=utf-8').send(injectBasePath(readFile('reset-password.html'), basePath));
   });
 
   router.post('/auth/reset-password', async (req: Request, res: Response) => {
     const { token, password } = req.body as { token?: string; password?: string };
-    if (!token || !password) { res.redirect('/auth/reset-password?error=invalid'); return; }
+    if (!token || !password) { res.redirect(`${basePath}/auth/reset-password?error=invalid`); return; }
     const pwError = validatePasswordComplexity(password);
-    if (pwError) { res.redirect(`/auth/reset-password?token=${encodeURIComponent(token)}&error=weak`); return; }
+    if (pwError) { res.redirect(`${basePath}/auth/reset-password?token=${encodeURIComponent(token)}&error=weak`); return; }
     const userId = await consumePasswordResetToken(pool, token);
-    if (!userId) { res.redirect('/auth/reset-password?error=invalid'); return; }
+    if (!userId) { res.redirect(`${basePath}/auth/reset-password?error=invalid`); return; }
     const hash = await bcrypt.hash(password, 12);
     await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, userId]);
-    res.redirect('/login?reset=1');
+    res.redirect(`${basePath}/login?reset=1`);
   });
 
   if (providers.google) {
     router.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
     router.get('/auth/google/callback',
-      passport.authenticate('google', { failureRedirect: '/login?error=1' }),
-      (req: Request, res: Response) => res.redirect(req.user!.approved ? '/' : '/pending')
+      passport.authenticate('google', { failureRedirect: `${basePath}/login?error=1` }),
+      (req: Request, res: Response) => res.redirect(req.user!.approved ? `${basePath}/` : `${basePath}/pending`)
     );
   }
 
   if (providers.facebook) {
     router.get('/auth/facebook', passport.authenticate('facebook', { scope: ['email'] }));
     router.get('/auth/facebook/callback',
-      passport.authenticate('facebook', { failureRedirect: '/login?error=1' }),
-      (req: Request, res: Response) => res.redirect(req.user!.approved ? '/' : '/pending')
+      passport.authenticate('facebook', { failureRedirect: `${basePath}/login?error=1` }),
+      (req: Request, res: Response) => res.redirect(req.user!.approved ? `${basePath}/` : `${basePath}/pending`)
     );
   }
 
   if (providers.microsoft) {
     router.get('/auth/microsoft', passport.authenticate('microsoft'));
     router.get('/auth/microsoft/callback',
-      passport.authenticate('microsoft', { failureRedirect: '/login?error=1' }),
-      (req: Request, res: Response) => res.redirect(req.user!.approved ? '/' : '/pending')
+      passport.authenticate('microsoft', { failureRedirect: `${basePath}/login?error=1` }),
+      (req: Request, res: Response) => res.redirect(req.user!.approved ? `${basePath}/` : `${basePath}/pending`)
     );
   }
 
@@ -580,46 +586,46 @@ export function createAuthRouter(
 
   router.post('/admin/users/:id/approve', requireAdmin, async (req: Request, res: Response) => {
     await pool.query('UPDATE users SET approved=true WHERE id=$1', [req.params.id]);
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/users/:id/reject', requireAdmin, async (req: Request, res: Response) => {
     await pool.query('DELETE FROM users WHERE id=$1 AND id!=$2', [req.params.id, req.user!.id]);
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/users/:id/promote', requireAdmin, async (req: Request, res: Response) => {
     await pool.query('UPDATE users SET is_admin=true WHERE id=$1', [req.params.id]);
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/users/:id/demote', requireAdmin, async (req: Request, res: Response) => {
     const adminCount = await pool.query<{ count: string }>('SELECT COUNT(*)::text as count FROM users WHERE is_admin=true');
     if (parseInt(adminCount.rows[0].count) <= 1) {
-      res.redirect('/admin?error=last-admin');
+      res.redirect(`${basePath}/admin?error=last-admin`);
       return;
     }
     await pool.query('UPDATE users SET is_admin=false WHERE id=$1 AND id!=$2', [req.params.id, req.user!.id]);
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/set-password', requireAdmin, async (req: Request, res: Response) => {
     const { userId, password } = req.body as { userId: string; password: string };
-    if (!userId || !password) { res.redirect('/admin?error=missing'); return; }
+    if (!userId || !password) { res.redirect(`${basePath}/admin?error=missing`); return; }
     const pwError = validatePasswordComplexity(password);
-    if (pwError) { res.redirect('/admin?error=weak'); return; }
+    if (pwError) { res.redirect(`${basePath}/admin?error=weak`); return; }
     const hash = await bcrypt.hash(password, 12);
     await pool.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, userId]);
-    res.redirect('/admin?success=password');
+    res.redirect(`${basePath}/admin?success=password`);
   });
 
   router.post('/admin/reset-session', requireAdmin, async (req: Request, res: Response) => {
     const weekId = parseInt(req.body.weekId as string);
-    if (!weekId) { res.redirect('/admin'); return; }
+    if (!weekId) { res.redirect(`${basePath}/admin`); return; }
     const weekRes = await pool.query<{ label: string }>(
       'SELECT label FROM weeks WHERE id=$1', [weekId]
     );
-    if (!weekRes.rows.length) { res.redirect('/admin'); return; }
+    if (!weekRes.rows.length) { res.redirect(`${basePath}/admin`); return; }
     const weekLabel = weekRes.rows[0].label;
     const userName = (req.user as AppUser).display_name;
     const client = await pool.connect();
@@ -645,19 +651,19 @@ export function createAuthRouter(
       client.release();
     }
     reloadState().catch(() => {});
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/delete-week', requireAdmin, async (req: Request, res: Response) => {
     const weekId = parseInt(req.body.weekId as string);
-    if (!weekId) { res.redirect('/admin'); return; }
+    if (!weekId) { res.redirect(`${basePath}/admin`); return; }
     try {
       await deleteWeekFn(weekId, req.ip ?? 'unknown', (req.user as AppUser).display_name);
       await reloadState();
     } catch (e) {
       console.error('delete-week error:', (e as Error).message);
     }
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/reset-all', requireAdmin, async (req: Request, res: Response) => {
@@ -679,7 +685,7 @@ export function createAuthRouter(
       client.release();
     }
     reloadState().catch(() => {});
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/import-stock', requireAdmin, async (req: Request, res: Response) => {
@@ -696,7 +702,7 @@ export function createAuthRouter(
 
   router.post('/admin/freezer-options/add', requireAdmin, async (req: Request, res: Response) => {
     const label = ((req.body.label as string) ?? '').trim();
-    if (!label) { res.redirect('/admin'); return; }
+    if (!label) { res.redirect(`${basePath}/admin`); return; }
     await pool.query(
       `INSERT INTO freezer_options(label, sort_order)
        VALUES($1, (SELECT COALESCE(MAX(sort_order)+1, 0) FROM freezer_options))
@@ -704,14 +710,14 @@ export function createAuthRouter(
       [label]
     );
     reloadState().catch(() => {});
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/freezer-options/delete', requireAdmin, async (req: Request, res: Response) => {
     const id = parseInt(req.body.id as string);
     if (id) await pool.query('DELETE FROM freezer_options WHERE id=$1', [id]);
     reloadState().catch(() => {});
-    res.redirect('/admin');
+    res.redirect(`${basePath}/admin`);
   });
 
   router.post('/admin/sql', requireAdmin, async (req: Request, res: Response) => {

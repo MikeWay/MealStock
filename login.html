@@ -150,7 +150,8 @@ function setMode(mode) {
   document.getElementById('btn-register').classList.toggle('active', isReg);
   document.getElementById('card-title').textContent = isReg ? 'Create account' : 'Sign in';
   document.getElementById('card-sub').textContent = isReg ? 'Register to access meal stock.' : 'Access your meal stock dashboard.';
-  document.getElementById('auth-form').action = isReg ? '/auth/register' : '/auth/login';
+  var bp = window.__BASE_PATH__ || '';
+  document.getElementById('auth-form').action = isReg ? bp+'/auth/register' : bp+'/auth/login';
   document.getElementById('name-field').classList.toggle('visible', isReg);
   document.getElementById('submit-btn').textContent = isReg ? 'Create account' : 'Sign in';
   document.getElementById('pw-hint').style.display = isReg ? 'block' : 'none';

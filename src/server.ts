@@ -14,6 +14,7 @@ import { AppUser, configurePassport, requireAuth } from './auth';
 import { createAuthRouter, OAuthProviders } from './routes';
 
 const PORT = parseInt(process.env.PORT || '3000');
+const BASE_PATH = (process.env.BASE_PATH || '').replace(/\/$/, '');
 const SERVER_STARTED_AT = Date.now();
 const APP_VERSION = (() => {
   try { return (JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }).version; }
@@ -431,22 +432,22 @@ const reloadState = async (): Promise<void> => {
     cachedState = null;
   }
 };
-app.use(createAuthRouter(pool, providers, reloadState, async (weekDbId, deviceIp, userName) => {
+app.use(BASE_PATH, createAuthRouter(pool, providers, reloadState, BASE_PATH, async (weekDbId, deviceIp, userName) => {
   await deleteWeek(weekDbId, cachedState!, deviceIp, userName);
 }));
 
-app.get('/', requireAuth, (req: Request, res: Response) => {
+app.get(`${BASE_PATH}/`, requireAuth, (req: Request, res: Response) => {
   const user = req.user!;
-  const script = `<script>window.__USER__=${JSON.stringify({ is_admin: user.is_admin, display_name: user.display_name })};</script>`;
+  const script = `<script>window.__USER__=${JSON.stringify({ is_admin: user.is_admin, display_name: user.display_name })};window.__BASE_PATH__=${JSON.stringify(BASE_PATH)};</script>`;
   const html = getClientHTML().replace('</head>', `${script}\n</head>`);
   res.setHeader('Content-Type', 'text/html; charset=utf-8').send(html);
 });
 
-app.get('/version', requireAuth, (_req: Request, res: Response) => {
+app.get(`${BASE_PATH}/version`, requireAuth, (_req: Request, res: Response) => {
   res.json({ version: SERVER_STARTED_AT, appVersion: APP_VERSION });
 });
 
-app.get('/audit', requireAuth, async (_req: Request, res: Response) => {
+app.get(`${BASE_PATH}/audit`, requireAuth, async (_req: Request, res: Response) => {
   try {
     const rows = await getAuditLog(500);
     res.setHeader('Content-Type', 'application/json').send(JSON.stringify(rows));
