@@ -643,7 +643,7 @@ function toggleAudit() {
 
 async function loadAudit() {
   try {
-    const res=await fetch('/audit');
+    const res=await fetch((window.__BASE_PATH__||'')+'/audit');
     auditData=await res.json();
     // Populate week filter
     const weeks=[...new Set(auditData.map(r=>r.week_label))];
@@ -720,7 +720,7 @@ connectWS();
 let serverVersion=null;
 async function checkVersion(){
   try{
-    const r=await fetch('/version');
+    const r=await fetch((window.__BASE_PATH__||'')+'/version');
     if(!r.ok) return;
     const {version,appVersion}=await r.json();
     if(serverVersion===null){
