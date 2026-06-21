@@ -207,15 +207,17 @@ export async function validatePasswordResetToken(pool: Pool, rawToken: string): 
   return res.rows.length > 0;
 }
 
+const BASE = (process.env.BASE_PATH || '').replace(/\/$/, '');
+
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  if (!req.isAuthenticated()) { res.redirect('/login'); return; }
-  if (!req.user!.approved) { res.redirect('/pending'); return; }
+  if (!req.isAuthenticated()) { res.redirect(`${BASE}/login`); return; }
+  if (!req.user!.approved) { res.redirect(`${BASE}/pending`); return; }
   next();
 }
 
 export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  if (!req.isAuthenticated()) { res.redirect('/login'); return; }
-  if (!req.user!.approved) { res.redirect('/pending'); return; }
+  if (!req.isAuthenticated()) { res.redirect(`${BASE}/login`); return; }
+  if (!req.user!.approved) { res.redirect(`${BASE}/pending`); return; }
   if (!req.user!.is_admin) { res.status(403).send('Forbidden'); return; }
   next();
 }
