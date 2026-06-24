@@ -1,0 +1,198 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1777277209524,
+  "projectRoot": "/home/mjrw/work/scm-tools",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "express",
+        "version": "5.2.1",
+        "category": "backend"
+      },
+      {
+        "name": "playwright",
+        "version": "1.58.2",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "tsx watch src/server.ts",
+      "build": "tsc && rm -rf dist/public && cp -r src/public dist/public",
+      "start": "node dist/server.js"
+    }
+  },
+  "conventions": {
+    "namingStyle": "camelCase",
+    "importStyle": "ES modules",
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "src"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 10,
+      "lastAccessed": 1777277209518,
+      "keyFiles": [
+        "config.d.ts",
+        "config.js",
+        "email.d.ts",
+        "email.js",
+        "roleStore.d.ts"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1777277209521,
+      "keyFiles": [
+        "contact-merge.md"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 5,
+      "lastAccessed": 1777277209522,
+      "keyFiles": [
+        "config.ts",
+        "email.ts",
+        "roleStore.ts",
+        "server.ts",
+        "userStore.ts"
+      ]
+    },
+    "test-data": {
+      "path": "test-data",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1777277209522,
+      "keyFiles": [
+        "bookings-2026-27032026.csv"
+      ]
+    },
+    "test-minutes": {
+      "path": "test-minutes",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1777277209522,
+      "keyFiles": []
+    },
+    "dist/middleware": {
+      "path": "dist/middleware",
+      "purpose": "Middleware",
+      "fileCount": 4,
+      "lastAccessed": 1777277209523,
+      "keyFiles": [
+        "requireAuth.d.ts",
+        "requireAuth.js",
+        "requirePermission.d.ts"
+      ]
+    },
+    "dist/public": {
+      "path": "dist/public",
+      "purpose": "Public files",
+      "fileCount": 1,
+      "lastAccessed": 1777277209524,
+      "keyFiles": [
+        "index.html"
+      ]
+    },
+    "dist/routes": {
+      "path": "dist/routes",
+      "purpose": "Route handlers",
+      "fileCount": 14,
+      "lastAccessed": 1777277209524,
+      "keyFiles": [
+        "auth.d.ts",
+        "auth.js",
+        "consents.d.ts"
+      ]
+    },
+    "src/middleware": {
+      "path": "src/middleware",
+      "purpose": "Middleware",
+      "fileCount": 2,
+      "lastAccessed": 1777277209524,
+      "keyFiles": [
+        "requireAuth.ts",
+        "requirePermission.ts"
+      ]
+    },
+    "src/public": {
+      "path": "src/public",
+      "purpose": "Public files",
+      "fileCount": 1,
+      "lastAccessed": 1777277209524,
+      "keyFiles": [
+        "index.html"
+      ]
+    },
+    "src/routes": {
+      "path": "src/routes",
+      "purpose": "Route handlers",
+      "fileCount": 7,
+      "lastAccessed": 1777277209524,
+      "keyFiles": [
+        "auth.ts",
+        "consents.ts",
+        "contacts.ts"
+      ]
+    },
+    "src/types": {
+      "path": "src/types",
+      "purpose": "Type definitions",
+      "fileCount": 1,
+      "lastAccessed": 1777277209524,
+      "keyFiles": [
+        "session.d.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/scraper/stackcp.ts",
+      "accessCount": 15,
+      "lastAccessed": 1777282687232,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

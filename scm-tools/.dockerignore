@@ -1,0 +1,13 @@
+node_modules
+dist
+.auth
+.cache
+.env
+*.pem
+deploy.sh
+deploy-container.sh
+.omc
+.claude
+.claudeignore
+.git
+*.md
