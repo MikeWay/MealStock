@@ -12,7 +12,10 @@ export async function launchBrowser(statePath: string): Promise<{
     mkdirSync(authDir, { recursive: true });
   }
 
-  const browser = await chromium.launch({ headless: PLAYWRIGHT_HEADLESS });
+  const browser = await chromium.launch({
+    headless: PLAYWRIGHT_HEADLESS,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
 
   const hasState = existsSync(statePath);
   const context = await browser.newContext(
