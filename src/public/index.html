@@ -1,0 +1,3339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCM Tools Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design tokens (Direction B — lighter & cleaner) ─────────────────── */
+    :root {
+      /* Lightened navy palette */
+      --navy-900:     #0f2747;
+      --navy-800:     #18345c;
+      --navy-700:     #1f4072;
+      --navy-600:     #2c5282;
+      --navy-500:     #3a6aa3;
+      --navy-400:     #6b8fbf;
+      --navy-200:     #c5d4e8;
+      --navy-100:     #e6edf7;
+      --navy-50:      #f3f7fc;
+
+      /* Legacy aliases — keep the old variable names working everywhere */
+      --primary:      var(--navy-600);
+      --primary-dark: var(--navy-800);
+      --accent:       #2563d6;
+      --accent-dark:  #1f4ec0;
+      --danger:       #b13a3a;
+      --danger-dark:  #8e2c2c;
+      --warning:      #b45a14;
+      --warning-dark: #8e4410;
+      --success:      #1f8a5b;
+      --success-dark: #176d48;
+      --purple:       #5b46c1;
+      --purple-dark:  #44359a;
+      --teal:         var(--navy-600);
+      --teal-dark:    var(--navy-800);
+      --neutral:      #3d4e66;
+      --neutral-dark: #11243f;
+
+      --bg:           #f6f8fb;
+      --card:         #ffffff;
+      --surface-2:    #f9fafc;
+      --border:       #e3e8f0;
+      --line-soft:    #eef1f6;
+      --text:         #11243f;
+      --text-2:       #3d4e66;
+      --muted:        #6b7a8f;
+      --mute-2:       #93a0b3;
+
+      --ok-bg:        #e3f3eb;
+      --warn-bg:      #fbeede;
+      --err-bg:       #fbe6e6;
+
+      --radius:       10px;
+      --r-sm:         6px;
+      --r-md:         10px;
+      --shadow:       0 1px 2px rgba(15, 39, 71, 0.05);
+      --shadow-md:    0 4px 14px rgba(15, 39, 71, 0.07), 0 1px 2px rgba(15, 39, 71, 0.04);
+      --shadow-lg:    0 12px 32px rgba(15, 39, 71, 0.12), 0 2px 6px rgba(15, 39, 71, 0.05);
+      --t-fast:       120ms cubic-bezier(0.2, 0.7, 0.3, 1);
+      --t-base:       180ms cubic-bezier(0.2, 0.7, 0.3, 1);
+    }
+
+    /* ── Reset & base ───────────────────────────────────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────────── */
+    #app-header {
+      background: var(--primary);
+      color: #fff;
+      padding: 0 1.5rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+    }
+
+    #app-header .brand {
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    #app-header .spacer { flex: 1; }
+
+    #app-header .header-email {
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.7);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    /* ── Header action buttons ───────────────────────────────────────────── */
+    .hdr-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.35rem 0.9rem;
+      border: 1px solid rgba(255,255,255,0.35);
+      background: transparent;
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 500;
+      white-space: nowrap;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .hdr-btn:hover { background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.6); }
+    .hdr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Page wrapper ───────────────────────────────────────────────────── */
+    .page {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 3rem;
+    }
+
+    /* ── Card ───────────────────────────────────────────────────────────── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1.5rem;
+    }
+
+    /* ── Status bar ─────────────────────────────────────────────────────── */
+    #status {
+      font-size: 0.85rem;
+      color: var(--muted);
+      padding: 0.6rem 1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1.25rem;
+    }
+
+    /* ── Tab navigation ─────────────────────────────────────────────────── */
+    .tab-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding: 0.6rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      margin-bottom: 1.5rem;
+    }
+
+    .tab-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.45rem 1rem;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: var(--text);
+      background: transparent;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .tab-btn:hover { background: var(--bg); }
+    .tab-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Per-tab accent colours */
+    .tab-btn.tab-tasks        { --tc: var(--accent); }
+    .tab-btn.tab-duplicates   { --tc: var(--accent); }
+    .tab-btn.tab-clear-cache  { --tc: var(--danger); }
+    .tab-btn.tab-email        { --tc: var(--accent); }
+    .tab-btn.tab-fix-email    { --tc: var(--warning); }
+    .tab-btn.tab-minutes      { --tc: var(--purple); }
+    .tab-btn.tab-consents     { --tc: var(--teal); }
+    .tab-btn.tab-users        { --tc: var(--neutral); }
+    .tab-btn.tab-name-repair  { --tc: var(--warning); }
+
+    .tab-btn.active {
+      background: var(--tc, var(--accent));
+      color: #fff;
+    }
+    .tab-btn.active:hover { opacity: 0.92; }
+
+    /* Dot indicator on non-active tab buttons */
+    .tab-btn .tab-dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--tc, var(--accent));
+      margin-right: 0.45rem;
+      flex-shrink: 0;
+    }
+    .tab-btn.active .tab-dot { background: rgba(255,255,255,0.75); }
+
+    /* ── Section headings ───────────────────────────────────────────────── */
+    .section-heading {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    /* ── Generic button ─────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.45rem 1.1rem;
+      border: none;
+      border-radius: 7px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: opacity 0.15s, box-shadow 0.15s;
+      white-space: nowrap;
+      text-decoration: none;
+      color: #fff;
+    }
+    .btn:hover { opacity: 0.88; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
+
+    .btn-accent   { background: var(--accent); }
+    .btn-danger   { background: var(--danger); }
+    .btn-warning  { background: var(--warning); }
+    .btn-success  { background: var(--success); }
+    .btn-purple   { background: var(--purple); }
+    .btn-teal     { background: var(--teal); }
+    .btn-neutral  { background: var(--neutral); }
+    .btn-ghost    { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg); color: var(--text); }
+
+    .btn-sm { padding: 0.25rem 0.65rem; font-size: 0.8rem; border-radius: 5px; }
+    .role-tag { display:inline-flex;align-items:center;gap:0.2rem;background:var(--accent);color:#fff;border-radius:4px;padding:1px 6px;font-size:0.78rem;margin:1px 2px; }
+    .role-tag-remove { background:none;border:none;color:#fff;cursor:pointer;font-size:0.9rem;padding:0;line-height:1;opacity:0.8; }
+    .role-tag-remove:hover { opacity:1; }
+
+    /* ── Forms ──────────────────────────────────────────────────────────── */
+    .form-group { margin-bottom: 1rem; }
+    .form-group:last-of-type { margin-bottom: 0; }
+
+    label {
+      display: block;
+      font-size: 0.84rem;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 0.35rem;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      padding: 0.55rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      color: var(--text);
+      background: var(--card);
+      transition: border-color 0.15s, box-shadow 0.15s;
+      outline: none;
+    }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(49,130,206,0.15);
+    }
+
+    /* ── State indicators ───────────────────────────────────────────────── */
+    .text-error   { color: #c53030; }
+    .text-muted   { color: var(--muted); font-style: italic; }
+
+    .alert {
+      padding: 0.75rem 1rem;
+      border-radius: 7px;
+      font-size: 0.88rem;
+      margin-top: 1rem;
+    }
+    .alert-success { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+    .alert-warning { background: #fffbeb; color: #92400e; border: 1px solid #fde68a; }
+    .alert-error   { background: #fff5f5; color: #c53030; border: 1px solid #fed7d7; }
+    .alert ul { margin: 0.4rem 0 0 1.2rem; }
+
+    /* ── Tables ─────────────────────────────────────────────────────────── */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 0.55rem 0.85rem;
+      background: var(--bg);
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 2px solid var(--border);
+    }
+    .data-table td {
+      padding: 0.6rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .data-table tbody tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: #f7fafc; }
+    .data-table a { color: var(--accent); text-decoration: none; }
+    .data-table a:hover { text-decoration: underline; }
+
+    /* ── Badges ─────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.55rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .badge-consented     { background: #f0fff4; color: #276749; border: 1px solid #c6f6d5; }
+    .badge-withdrawn     { background: #fff5f5; color: #c53030; border: 1px solid #fed7d7; }
+    .badge-not_consented { background: #f7fafc; color: #4a5568; border: 1px solid #e2e8f0; }
+    .badge-no_record     { background: #f7fafc; color: #a0aec0; border: 1px solid #e2e8f0; }
+
+    /* ── Tasks list ─────────────────────────────────────────────────────── */
+    .tasks-list { list-style: none; padding: 0; }
+    .tasks-list li {
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .tasks-list li:last-child { border-bottom: none; }
+    .tasks-list a { color: var(--accent); text-decoration: none; }
+    .tasks-list a:hover { text-decoration: underline; }
+
+    /* ── Duplicate groups ───────────────────────────────────────────────── */
+    .dup-group {
+      margin-bottom: 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .merge-btn {
+      padding: 0.25rem 0.65rem;
+      background: var(--success);
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-family: inherit;
+      font-weight: 500;
+    }
+    .merge-btn:hover { background: var(--success-dark); }
+    .merge-btn:disabled { background: #a0aec0; cursor: not-allowed; }
+    .merge-result { padding: 0.5rem 0.85rem; font-size: 0.85rem; white-space: pre-wrap; }
+    .merge-result.success { background: #f0fff4; color: #276749; }
+    .merge-result.failure { background: #fff5f5; color: #c53030; }
+    .swap-btn {
+      padding: 0.15rem 0.5rem;
+      background: none;
+      border: 1px solid #cbd5e0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-family: inherit;
+    }
+    .swap-btn:hover { background: #f7fafc; color: var(--text); }
+
+    /* ── Withdraw btn ───────────────────────────────────────────────────── */
+    .withdraw-btn {
+      padding: 0.2rem 0.55rem;
+      background: var(--danger);
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-family: inherit;
+      font-weight: 500;
+    }
+    .withdraw-btn:hover { background: var(--danger-dark); }
+    .withdraw-btn:disabled { background: #a0aec0; cursor: not-allowed; }
+
+    /* ── Consent filters ────────────────────────────────────────────────── */
+    .consent-filters {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .filter-btn {
+      padding: 0.3rem 0.85rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      border-radius: 20px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--muted);
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .filter-btn.active {
+      background: var(--teal);
+      color: #fff;
+      border-color: var(--teal);
+    }
+
+    /* ── Progress bar ───────────────────────────────────────────────────── */
+    #consents-progress { margin: 0.75rem 0; }
+    #consents-progress-bar-wrap {
+      background: var(--border);
+      border-radius: 6px;
+      height: 8px;
+      margin-bottom: 0.5rem;
+    }
+    #consents-progress-bar {
+      background: var(--teal);
+      height: 8px;
+      border-radius: 6px;
+      width: 0;
+      transition: width 0.3s ease;
+    }
+    #consents-progress-text { font-size: 0.82rem; color: var(--muted); }
+    #consents-meta { font-size: 0.84rem; color: var(--muted); margin-bottom: 0.85rem; }
+
+    /* ── SCM login modal ────────────────────────────────────────────────── */
+    #scm-modal-overlay {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.45);
+      display: flex; align-items: center; justify-content: center;
+    }
+    #scm-modal-box {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      padding: 2rem;
+      width: 100%; max-width: 380px;
+    }
+    #scm-modal-box h3 { margin-bottom: 0.25rem; }
+    #scm-modal-box p  { font-size: 0.85rem; color: var(--muted); margin-bottom: 1.25rem; }
+
+    /* ── Minutes browse row ─────────────────────────────────────────────── */
+    #minutes-browse-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 0.85rem;
+    }
+    #minutes-file-label { font-size: 0.84rem; color: var(--muted); }
+    .hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+      line-height: 1.5;
+    }
+    .hint code {
+      font-family: 'DM Mono', monospace;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.1em 0.35em;
+      font-size: 0.85em;
+    }
+
+    /* ── Manage Users section ───────────────────────────────────────────── */
+    .users-sub-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+    @media (max-width: 640px) {
+      .users-sub-grid { grid-template-columns: 1fr; }
+    }
+
+    .sub-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .sub-card h3 {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1rem;
+    }
+
+    .form-msg { font-size: 0.84rem; color: var(--muted); margin-top: 0.6rem; min-height: 1.2em; }
+
+    /* ── Login page ─────────────────────────────────────────────────────── */
+    #login-section {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      padding: 2rem 1rem;
+    }
+
+    .login-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow-lg);
+      padding: 2.5rem 2rem;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .login-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 2rem;
+    }
+    .login-logo-icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      background: var(--primary);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .login-logo-icon svg { width: 20px; height: 20px; fill: #fff; }
+    .login-logo-text { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+
+    .login-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.3rem;
+    }
+    .login-subtitle {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 1.75rem;
+    }
+
+    #login-error { font-size: 0.84rem; color: #c53030; min-height: 1.2em; margin-top: 0.6rem; }
+    #bootstrap-error { font-size: 0.84rem; color: #c53030; min-height: 1.2em; margin-top: 0.6rem; }
+
+    /* ── Button row ─────────────────────────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      .page { padding: 1.25rem 1rem 2.5rem; }
+      #app-header .header-email { display: none; }
+      .tab-btn { font-size: 0.78rem; padding: 0.4rem 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Login page ─────────────────────────────────────────────────────── -->
+  <div id="login-section" style="display:none;">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="login-logo-icon">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9V8h2v8zm4 0h-2V8h2v8z"/>
+          </svg>
+        </div>
+        <span class="login-logo-text">SCM Tools</span>
+      </div>
+
+      <div id="login-box">
+        <p class="login-title">Sign in</p>
+        <p class="login-subtitle">Enter your credentials to access the dashboard</p>
+        <form id="login-form" autocomplete="on">
+          <div class="form-group">
+            <label for="email-input">Email</label>
+            <input type="email" id="email-input" autocomplete="email" required placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="password-input">Password</label>
+            <input type="password" id="password-input" autocomplete="current-password" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;margin-top:1rem;">Sign in</button>
+          <div id="login-error"></div>
+          <p style="margin-top:0.75rem;text-align:center;font-size:0.85rem;">
+            <a href="#" id="forgot-link" style="color:var(--accent);">Forgot password?</a>
+          </p>
+        </form>
+      </div>
+
+      <div id="forgot-box" style="display:none;margin-top:1.5rem;">
+        <p class="login-title">Reset password</p>
+        <p class="login-subtitle">Enter your email and we'll send a reset link.</p>
+        <form id="forgot-form">
+          <div class="form-group">
+            <label for="forgot-email">Email</label>
+            <input type="email" id="forgot-email" required placeholder="you@example.com">
+          </div>
+          <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;margin-top:1rem;">Send reset link</button>
+          <div id="forgot-msg" class="form-msg"></div>
+        </form>
+        <p style="margin-top:0.75rem;text-align:center;font-size:0.85rem;">
+          <a href="#" id="back-to-login-link" style="color:var(--accent);">Back to sign in</a>
+        </p>
+      </div>
+
+      <div id="reset-box" style="display:none;margin-top:1.5rem;">
+        <p class="login-title">Set new password</p>
+        <p class="login-subtitle">Enter a new password for your account.</p>
+        <form id="reset-token-form">
+          <div class="form-group">
+            <label for="new-password-input">New password</label>
+            <input type="password" id="new-password-input" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;margin-top:1rem;">Set password</button>
+          <div id="reset-token-msg" class="form-msg"></div>
+        </form>
+      </div>
+
+      <div id="bootstrap-box" style="display:none;margin-top:1.5rem;">
+        <p class="login-title">Create first account</p>
+        <p class="login-subtitle">No accounts exist yet. Create one to get started.</p>
+        <form id="bootstrap-form">
+          <div class="form-group">
+            <label for="bootstrap-email">Email</label>
+            <input type="email" id="bootstrap-email" required placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="bootstrap-password">Password</label>
+            <input type="password" id="bootstrap-password" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;margin-top:1rem;">Create account</button>
+          <div id="bootstrap-error"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Dashboard ──────────────────────────────────────────────────────── -->
+  <div id="dashboard-section" style="display:none;">
+
+    <!-- Header -->
+    <header id="app-header">
+      <span class="brand">SCM Tools</span>
+      <span class="spacer"></span>
+      <span class="header-email" id="header-email"></span>
+      <span class="header-email" id="scm-user-email" style="display:none;"></span>
+      <button id="scm-login-btn" class="hdr-btn">Connect to SCM</button>
+      <button id="logout-btn" class="hdr-btn">Sign out</button>
+    </header>
+
+    <!-- Dashboard header (kept for JS compatibility — hidden, real header above) -->
+    <div id="dashboard-header" style="display:none;">
+      <h1>SCM Tools Dashboard</h1>
+    </div>
+
+    <div class="page">
+
+      <!-- Status bar -->
+      <div id="status">Loading…</div>
+
+      <!-- Tab navigation -->
+      <nav class="tab-nav" role="navigation" aria-label="Dashboard sections">
+        <button class="tab-btn tab-tasks"       id="tasks-btn">
+          <span class="tab-dot"></span>SCM Tasks
+        </button>
+        <button class="tab-btn tab-duplicates"  id="duplicates-btn">
+          <span class="tab-dot"></span>Fix Duplicate Contacts
+        </button>
+        <button class="tab-btn tab-clear-cache" id="clear-cache-btn">
+          <span class="tab-dot"></span>Clear Cache
+        </button>
+        <button class="tab-btn tab-name-repair" id="name-repair-btn">
+          <span class="tab-dot"></span>Repair Contact Names
+        </button>
+        <button class="tab-btn tab-email"       id="email-issues-btn">
+          <span class="tab-dot"></span>Email Issues
+        </button>
+        <button class="tab-btn tab-fix-email"   id="fix-email-issues-btn">
+          <span class="tab-dot"></span>Fix Email Issues
+        </button>
+        <button class="tab-btn tab-minutes"     id="minutes-btn">
+          <span class="tab-dot"></span>Upload Minutes
+        </button>
+        <button class="tab-btn tab-consents"    id="consents-btn">
+          <span class="tab-dot"></span>Photo Consents
+        </button>
+        <button class="tab-btn tab-users"       id="users-btn">
+          <span class="tab-dot"></span>Manage Users
+        </button>
+        <button class="tab-btn tab-scheduler"   id="scheduler-btn">
+          <span class="tab-dot"></span>Scheduler
+        </button>
+      </nav>
+
+      <!-- Tasks section -->
+      <div id="tasks-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">In Need of Attention</h2>
+          <div id="tasks-content">
+            <span class="text-muted">Loading tasks…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Duplicates section -->
+      <div id="duplicates-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">Duplicate Contacts</h2>
+          <div id="duplicates-content"></div>
+        </div>
+      </div>
+
+      <!-- Repair Contact Names section -->
+      <div id="name-repair-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">Repair Contact Names</h2>
+          <div id="name-repair-content">
+            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:0.75rem;">Checks all cached contacts for names with leading/trailing spaces or incorrect capitalisation.</p>
+            <button class="merge-btn" id="name-repair-run-btn">Check Names</button>
+            <div id="name-repair-result" style="margin-top:1rem;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Email issues section -->
+      <div id="email-issues-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">Email Issues</h2>
+          <div id="email-issues-content"></div>
+        </div>
+      </div>
+
+      <!-- Minutes section -->
+      <div id="minutes-section" style="display:none;">
+        <div class="card" style="max-width:560px;">
+          <h2 class="section-heading">Sync Minutes</h2>
+          <form id="minutes-form">
+            <div class="form-group">
+              <label>Select minutes folder</label>
+              <div id="minutes-browse-row">
+                <input type="file" id="minutes-file-input" webkitdirectory multiple
+                       style="position:absolute;opacity:0;width:0;height:0;overflow:hidden;">
+                <button type="button" id="minutes-browse-btn" class="btn btn-purple">Browse&hellip;</button>
+                <span id="minutes-file-label">No folder selected</span>
+              </div>
+              <p class="hint">Select the <strong>top-level minutes folder</strong> — the one that contains subdirectories named e.g. <code>management</code>, <code>sailing</code>. PDFs inside each subdirectory must be named <code>dd-mm-yyyy.pdf</code>.</p>
+            </div>
+            <button type="submit" class="btn btn-purple" id="minutes-submit">Sync &amp; Regenerate</button>
+            <div id="minutes-result" style="display:none;"></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Consents section -->
+      <div id="consents-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">Photo Consents</h2>
+          <div id="consents-meta"></div>
+          <div class="btn-row">
+            <button class="btn btn-teal"    id="consents-scan-btn">Scan Consents</button>
+            <button class="btn btn-ghost"   id="consents-force-btn">Force Refresh</button>
+            <button class="btn btn-danger"  id="consents-clear-btn">Clear Cache</button>
+            <button class="btn btn-success" id="consents-csv-btn" style="display:none;">Download CSV</button>
+          </div>
+          <div id="consents-progress" style="display:none;">
+            <div id="consents-progress-bar-wrap"><div id="consents-progress-bar"></div></div>
+            <p id="consents-progress-text"></p>
+          </div>
+          <div class="consent-filters" id="consents-filters" style="display:none;">
+            <button class="filter-btn active" data-filter="all">All</button>
+            <button class="filter-btn" data-filter="consented">Consented</button>
+            <button class="filter-btn" data-filter="withdrawn">Withdrawn</button>
+            <button class="filter-btn" data-filter="not_consented">Not Consented</button>
+            <button class="filter-btn" data-filter="no_record">No Record</button>
+          </div>
+          <div id="consents-content"></div>
+        </div>
+      </div>
+
+      <!-- Users section -->
+      <div id="users-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">Manage Users</h2>
+          <div id="users-list-content"></div>
+          <div class="users-sub-grid">
+            <div class="sub-card">
+              <h3>Create new user</h3>
+              <form id="create-user-form">
+                <div class="form-group">
+                  <label for="new-user-email">Email</label>
+                  <input type="email" id="new-user-email" required placeholder="user@example.com">
+                </div>
+                <div class="form-group" id="new-user-password-group">
+                  <label for="new-user-password">Password</label>
+                  <input type="password" id="new-user-password" placeholder="••••••••">
+                </div>
+                <div class="form-group" style="display:flex;align-items:center;gap:0.5rem;margin-top:0.25rem;">
+                  <input type="checkbox" id="invite-toggle" style="width:auto;margin:0;">
+                  <label for="invite-toggle" style="margin:0;font-weight:400;cursor:pointer;">Send invitation email (user sets own password)</label>
+                </div>
+                <button type="submit" class="btn btn-accent" id="create-user-submit" style="margin-top:0.75rem;">Create user</button>
+                <div id="create-user-msg" class="form-msg"></div>
+              </form>
+              <div id="invite-preview" style="display:none;margin-top:1rem;padding:1rem;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-md);">
+                <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.75rem;">Review and edit the invitation email before sending.</p>
+                <div class="form-group">
+                  <label for="invite-subject">Subject</label>
+                  <input type="text" id="invite-subject">
+                </div>
+                <div class="form-group">
+                  <label for="invite-body">Message</label>
+                  <textarea id="invite-body" rows="9" style="font-family:var(--mono,monospace);font-size:0.83rem;resize:vertical;width:100%;box-sizing:border-box;"></textarea>
+                </div>
+                <div style="display:flex;align-items:center;gap:0.75rem;">
+                  <button class="btn btn-accent" id="invite-send-btn">Send invite</button>
+                  <button type="button" class="btn" id="invite-cancel-btn" style="background:none;border:1px solid var(--border);color:var(--text-2);">Cancel</button>
+                </div>
+                <div id="invite-msg" class="form-msg"></div>
+              </div>
+            </div>
+            <div class="sub-card">
+              <h3>Reset password</h3>
+              <form id="reset-password-form">
+                <div class="form-group">
+                  <label for="reset-email">Email</label>
+                  <input type="email" id="reset-email" required placeholder="user@example.com">
+                </div>
+                <div class="form-group">
+                  <label for="reset-password">New password</label>
+                  <input type="password" id="reset-password" required placeholder="••••••••">
+                </div>
+                <button type="submit" class="btn btn-accent">Set password</button>
+                <div id="reset-password-msg" class="form-msg"></div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1.5rem;" id="roles-card">
+          <h2 class="section-heading">Manage Roles</h2>
+          <div id="roles-list-content" style="margin-bottom:1rem;"></div>
+          <div class="sub-card">
+            <h3 id="role-form-heading">Create new role</h3>
+            <form id="role-form">
+              <input type="hidden" id="role-edit-id" value="">
+              <div class="form-group">
+                <label for="role-name-input">Role name</label>
+                <input type="text" id="role-name-input" required placeholder="e.g. Viewer">
+              </div>
+              <table class="data-table" style="margin-bottom:0.75rem;max-width:480px;">
+                <thead><tr>
+                  <th style="text-align:left;">Area</th>
+                  <th style="text-align:center;">None</th>
+                  <th style="text-align:center;">View</th>
+                  <th style="text-align:center;">Full</th>
+                </tr></thead>
+                <tbody id="role-perms-tbody"></tbody>
+              </table>
+              <button type="submit" class="btn btn-accent" id="role-submit-btn">Create role</button>
+              <button type="button" class="btn" id="role-cancel-btn" style="display:none;margin-left:0.5rem;">Cancel</button>
+              <div id="role-form-msg" class="form-msg"></div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.page -->
+
+    <!-- SCM login modal -->
+    <div id="scm-modal-overlay" style="display:none;">
+      <div id="scm-modal-box">
+        <h3>Connect to SCM</h3>
+        <form id="scm-modal-form" autocomplete="on">
+          <p>Enter your SCM credentials. Your username will be remembered; your password will not.</p>
+          <div class="form-group">
+            <label for="scm-modal-username">Username</label>
+            <input type="email" id="scm-modal-username" autocomplete="username" required placeholder="you@example.com">
+          </div>
+          <div class="form-group">
+            <label for="scm-modal-password">Password</label>
+            <input type="password" id="scm-modal-password" autocomplete="current-password" required placeholder="••••••••">
+          </div>
+          <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;margin-top:0.5rem;" id="scm-modal-submit">Connect</button>
+          <div id="scm-modal-msg" class="form-msg" style="margin-top:0.5rem;"></div>
+        </form>
+        <div id="scm-mfa-box" style="display:none;">
+          <p>A verification code has been sent to your phone. Enter it below.</p>
+          <form id="scm-mfa-form">
+            <div class="form-group">
+              <label for="scm-mfa-code">Verification code</label>
+              <input type="text" id="scm-mfa-code" inputmode="numeric" maxlength="4" pattern="[0-9]{4}" required placeholder="1234" style="letter-spacing:0.25em;font-size:1.25rem;text-align:center;">
+            </div>
+            <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;margin-top:0.5rem;" id="scm-mfa-submit">Verify</button>
+            <div id="scm-mfa-msg" class="form-msg" style="margin-top:0.5rem;"></div>
+          </form>
+        </div>
+        <p style="margin-top:0.75rem;text-align:center;">
+          <a href="#" id="scm-modal-cancel" style="font-size:0.85rem;color:var(--muted);">Cancel</a>
+        </p>
+      </div>
+    </div>
+
+      <!-- Scheduler section -->
+      <div id="scheduler-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">Scheduled Jobs</h2>
+          <div id="scheduler-content"><span class="text-muted">Loading…</span></div>
+        </div>
+      </div>
+
+      <!-- Help section -->
+      <div id="help-section" style="display:none;">
+        <div class="card" style="max-width:760px;">
+          <h2 class="section-heading">User Guide</h2>
+          <div style="color:var(--text-2);font-size:0.92rem;line-height:1.75;">
+
+            <h3 style="margin:0.5rem 0 0.4rem;font-size:1rem;color:var(--text);">SCM Connection</h3>
+            <p>Most tools in this dashboard work by controlling SCM on your behalf, so <strong>an active SCM connection is required</strong> before you can use them. To connect, click the <strong>Connect to SCM</strong> button in the top-right of the header.</p>
+            <p style="margin-top:0.5rem;">A dialog will appear asking for your SCM username and password. After entering them, SCM will send a <strong>verification code to your mobile phone by SMS</strong> — enter that code in the second step to complete the login. Once connected, the button turns green and shows your SCM username.</p>
+            <p style="margin-top:0.5rem;">If credentials have been saved, the app will attempt to connect automatically when it starts — the button flashes orange while this is in progress. If you are prompted to connect when trying to use a tool, click <em>Connect to SCM</em> in the header first, then try again.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Home</h3>
+            <p>The home screen shows live counts for key areas — tasks, duplicates, email issues, name problems, photo consents, and failing scheduler jobs. Click any tile to jump straight to that tool. Counts update after SCM connects on startup.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Contacts › Duplicates</h3>
+            <p>Scans all contacts for pairs with similar names. <strong>Definite</strong> matches share a near-identical name. <strong>Possible</strong> matches are flagged with a reason — check them carefully before acting.</p>
+            <ul style="padding-left:1.4rem;margin-top:0.3rem;">
+              <li>Click <em>Preview Merge</em> to see which fields will be kept, then <em>Confirm Merge</em> to apply.</li>
+              <li>Click <em>Not a Duplicate</em> to tag the first contact and remove the pair from future scans.</li>
+              <li>Use <em>Swap</em> to change which contact is kept as the primary record.</li>
+            </ul>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Contacts › Name Repair</h3>
+            <p>Finds contacts whose names have capitalisation or whitespace issues (e.g. "john smith", "MARY  JONES"). Click <em>Check Names</em> to run the scan, review the list, exclude any you want to leave unchanged, then click <em>Apply Fixes</em> to update SCM.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Contacts › Email Issues</h3>
+            <p>Shows contacts with a bounce or malformed address recorded in SCM. The <em>Fix Email Issues</em> tool resets the mailing-error flag on each affected contact so they will receive emails again — use this after the underlying address problem has been corrected.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Tasks &amp; Status › SCM Tasks</h3>
+            <p>Lists items in SCM's "In Need of Attention" queue — bookings, membership renewals, and courses that need a manual action. Each item links directly to the relevant SCM page.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Tasks &amp; Status › Scheduler</h3>
+            <p>Shows all background jobs registered with the scheduler, when each last ran, and whether it succeeded or failed. Failed jobs are highlighted. The scheduler runs jobs automatically at their configured times — no manual action is needed unless a job is consistently failing.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Content › Upload Minutes</h3>
+            <p>Syncs a set of committee-meeting minutes from a local folder into SCM. Browse to the folder, then click <em>Sync &amp; Regenerate</em>. Already-uploaded files are skipped; only new ones are added.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Content › Photo Consents</h3>
+            <p>Shows each member's photo-consent status. Click <em>Scan Consents</em> to fetch the latest data from SCM (this may take a minute). Use the filter buttons to view all members, or just those consented, withdrawn, or without a record. You can withdraw a member's consent, or restore it, from the list. <em>Download CSV</em> exports the full list.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Admin › Users</h3>
+            <p>Create and delete dashboard accounts, reset passwords, and assign roles. Roles control which tools each user can see and what actions they can perform. The first account is created during initial setup without requiring an existing login.</p>
+
+            <h3 style="margin:1.5rem 0 0.4rem;font-size:1rem;color:var(--text);">Admin › Clear Cache</h3>
+            <p>The contact list is cached locally to avoid slow SCM fetches on every page load. Clicking <em>Clear Cache</em> deletes the cached file so the next contact operation fetches fresh data from SCM.</p>
+
+
+          </div>
+        </div>
+      </div>
+
+  </div><!-- /#dashboard-section -->
+
+  <script>
+    function showDashboard() {
+      document.getElementById("login-section").style.display = "none";
+      document.getElementById("dashboard-section").style.display = "block";
+      checkHealth();
+    }
+
+    function showLogin() {
+      document.getElementById("dashboard-section").style.display = "none";
+      document.getElementById("login-section").style.display = "flex";
+      document.getElementById("login-error").textContent = "";
+      document.getElementById("password-input").value = "";
+    }
+
+    var ALL_SECTIONS = ["tasks-section","duplicates-section","name-repair-section","email-issues-section","minutes-section","consents-section","users-section","scheduler-section","help-section"];
+    function hideAllSections() {
+      ALL_SECTIONS.forEach(function(id) {
+        document.getElementById(id).style.display = "none";
+      });
+    }
+
+    function checkHealth() {
+      fetch("/api/health")
+        .then(r => r.json())
+        .then(data => {
+          document.getElementById("status").textContent = "Server status: " + data.status;
+        })
+        .catch(() => {
+          document.getElementById("status").textContent = "Server unavailable";
+        });
+    }
+
+    // Check auth status on load — also handle ?reset=TOKEN in URL
+    var resetToken = new URLSearchParams(window.location.search).get("reset");
+    if (resetToken) {
+      // Strip the token from the URL immediately
+      history.replaceState(null, "", window.location.pathname);
+      document.getElementById("login-section").style.display = "flex";
+      document.getElementById("login-box").style.display = "none";
+      document.getElementById("reset-box").style.display = "block";
+    } else {
+      fetch("/api/auth/status")
+        .then(r => r.json())
+        .then(data => {
+          if (data.dashboardAuthenticated) {
+            if (data.userEmail) {
+              document.getElementById("header-email").textContent = "You: " + data.userEmail;
+            }
+            scmLoggedIn = data.scmLoggedIn === true;
+            updateScmBtn();
+            applyPermissions(data.permissions);
+            showDashboard();
+            if (!scmLoggedIn) startScmPoll();
+          } else {
+            showLogin();
+            if (data.noUsersExist) {
+              document.getElementById("login-box").style.display = "none";
+              document.getElementById("bootstrap-box").style.display = "block";
+            }
+          }
+        })
+        .catch(() => showLogin());
+    }
+
+    // Login form (email + password)
+    document.getElementById("login-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var email = document.getElementById("email-input").value;
+      var password = document.getElementById("password-input").value;
+      var errorEl = document.getElementById("login-error");
+      errorEl.textContent = "";
+      fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, password: password })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            document.getElementById("header-email").textContent = "You: " + email;
+            if (data.scmLoggedIn) {
+              scmLoggedIn = true;
+              updateScmBtn();
+            }
+            applyPermissions(data.permissions);
+            showDashboard();
+            if (!data.scmLoggedIn) {
+              startScmPoll();
+            }
+          } else {
+            errorEl.textContent = data.message || "Login failed";
+          }
+        })
+        .catch(function() { errorEl.textContent = "Network error"; });
+    });
+
+    // Forgot password link
+    document.getElementById("forgot-link").addEventListener("click", function(e) {
+      e.preventDefault();
+      document.getElementById("login-box").style.display = "none";
+      document.getElementById("forgot-box").style.display = "block";
+    });
+
+    document.getElementById("back-to-login-link").addEventListener("click", function(e) {
+      e.preventDefault();
+      document.getElementById("forgot-box").style.display = "none";
+      document.getElementById("login-box").style.display = "block";
+    });
+
+    document.getElementById("forgot-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var email = document.getElementById("forgot-email").value;
+      var msgEl = document.getElementById("forgot-msg");
+      msgEl.textContent = "";
+      fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) { msgEl.textContent = data.message || "Request sent."; this.reset(); }.bind(this))
+        .catch(function() { msgEl.textContent = "Network error"; });
+    });
+
+    // Reset password via token (from email link)
+    document.getElementById("reset-token-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var password = document.getElementById("new-password-input").value;
+      var msgEl = document.getElementById("reset-token-msg");
+      msgEl.textContent = "";
+      fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: resetToken, password: password })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          msgEl.textContent = data.message || (data.success ? "Password updated. You can now sign in." : "Failed.");
+          if (data.success) {
+            setTimeout(function() {
+              document.getElementById("reset-box").style.display = "none";
+              document.getElementById("login-box").style.display = "block";
+              resetToken = null;
+            }, 2000);
+          }
+        })
+        .catch(function() { msgEl.textContent = "Network error"; });
+    });
+
+    // Bootstrap: create first account
+    document.getElementById("bootstrap-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var email = document.getElementById("bootstrap-email").value;
+      var password = document.getElementById("bootstrap-password").value;
+      var errorEl = document.getElementById("bootstrap-error");
+      errorEl.textContent = "";
+      fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, password: password })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            document.getElementById("bootstrap-box").style.display = "none";
+            document.getElementById("login-box").style.display = "block";
+          } else {
+            errorEl.textContent = data.message || "Failed to create account";
+          }
+        })
+        .catch(function() { errorEl.textContent = "Network error"; });
+    });
+
+    // Logout
+    document.getElementById("logout-btn").addEventListener("click", function() {
+      fetch("/api/auth/logout", { method: "POST" })
+        .then(function() { showLogin(); })
+        .catch(function() { showLogin(); });
+    });
+
+    // Permissions
+    var AREAS = ['tasks','duplicates','emailIssues','minutes','consents','users'];
+    var AREA_LABELS = {
+      tasks:'SCM Tasks', duplicates:'Duplicate Contacts', emailIssues:'Email Issues',
+      minutes:'Upload Minutes', consents:'Photo Consents', users:'Manage Users'
+    };
+    var userPermissions = {};
+
+    function applyPermissions(perms) {
+      userPermissions = perms || {};
+      var p = userPermissions;
+      function vis(id, show) {
+        var el = document.getElementById(id);
+        if (el) el.style.display = show ? '' : 'none';
+      }
+      vis('tasks-btn',           p.tasks !== 'none' && !!p.tasks);
+      vis('duplicates-btn',      p.duplicates !== 'none' && !!p.duplicates);
+      vis('name-repair-btn',     p.duplicates !== 'none' && !!p.duplicates);
+      vis('clear-cache-btn',     p.duplicates === 'full');
+      vis('email-issues-btn',    p.emailIssues !== 'none' && !!p.emailIssues);
+      vis('fix-email-issues-btn',p.emailIssues === 'full');
+      vis('minutes-btn',         p.minutes !== 'none' && !!p.minutes);
+      vis('consents-btn',        p.consents !== 'none' && !!p.consents);
+      vis('consents-scan-btn',   p.consents !== 'none' && !!p.consents);
+      vis('consents-force-btn',  p.consents === 'full');
+      vis('consents-clear-btn',  p.consents === 'full');
+      vis('users-btn',           p.users !== 'none' && !!p.users);
+      vis('roles-card',          p.users === 'full');
+      vis('scheduler-btn',       p.users !== 'none' && !!p.users);
+    }
+
+    // SCM login state
+    var scmLoggedIn = false;
+    var pendingScmAction = null;
+    var scmPollInterval = null;
+    var scmPollCount = 0;
+    var SCM_POLL_MAX = 20;
+
+    function updateScmBtn() {
+      var btn = document.getElementById("scm-login-btn");
+      var emailSpan = document.getElementById("scm-user-email");
+      btn.textContent = scmLoggedIn ? "SCM Connected ×" : "Connect to SCM";
+      btn.classList.toggle("scm-connected", scmLoggedIn);
+      btn.classList.remove("scm-connecting");
+      if (scmLoggedIn) {
+        var saved = localStorage.getItem("scmUsername");
+        if (saved) { emailSpan.textContent = "SCM: " + saved; emailSpan.style.display = ""; }
+      } else {
+        emailSpan.textContent = "";
+        emailSpan.style.display = "none";
+      }
+    }
+
+    function startScmPoll() {
+      if (scmPollInterval || scmLoggedIn) return;
+      scmPollCount = 0;
+      scmPollInterval = setInterval(function() {
+        scmPollCount++;
+        fetch('/api/auth/status')
+          .then(function(r) { return r.json(); })
+          .then(function(s) {
+            if (s.scmConnecting) {
+              document.getElementById('scm-login-btn').classList.add('scm-connecting');
+            }
+            if (s.scmLoggedIn) {
+              scmLoggedIn = true;
+              stopScmPoll();
+              updateScmBtn();
+              // Re-fetch summary tiles now that tasks/email counts are available
+              fetch('/api/dashboard/summary')
+                .then(function(r) { return r.json(); })
+                .then(function(summary) { renderHomeTiles(summary); })
+                .catch(function() {});
+            } else if (scmPollCount >= SCM_POLL_MAX) {
+              stopScmPoll();
+            }
+          })
+          .catch(function() { if (scmPollCount >= SCM_POLL_MAX) stopScmPoll(); });
+      }, 3000);
+    }
+
+    function stopScmPoll() {
+      if (scmPollInterval) { clearInterval(scmPollInterval); scmPollInterval = null; }
+      document.getElementById('scm-login-btn').classList.remove('scm-connecting');
+    }
+
+    function showScmModal() {
+      var saved = localStorage.getItem("scmUsername");
+      if (saved) document.getElementById("scm-modal-username").value = saved;
+      document.getElementById("scm-modal-password").value = "";
+      document.getElementById("scm-modal-msg").textContent = "";
+      document.getElementById("scm-modal-submit").disabled = false;
+      document.getElementById("scm-modal-submit").textContent = "Connect";
+      document.getElementById("scm-modal-form").style.display = "block";
+      document.getElementById("scm-mfa-box").style.display = "none";
+      document.getElementById("scm-mfa-code").value = "";
+      document.getElementById("scm-mfa-msg").textContent = "";
+      document.getElementById("scm-modal-overlay").style.display = "flex";
+      document.getElementById("scm-modal-password").focus();
+    }
+
+    function hideScmModal() {
+      document.getElementById("scm-modal-overlay").style.display = "none";
+      pendingScmAction = null;
+    }
+
+    function requireScmLogin(callback) {
+      if (scmLoggedIn) { callback(); return; }
+      // Frontend state may be stale — check with server before showing modal
+      fetch('/api/auth/status')
+        .then(function(r) { return r.json(); })
+        .then(function(s) {
+          if (s.scmLoggedIn) {
+            scmLoggedIn = true;
+            updateScmBtn();
+            callback();
+          } else {
+            pendingScmAction = callback;
+            showScmModal();
+          }
+        })
+        .catch(function() {
+          pendingScmAction = callback;
+          showScmModal();
+        });
+    }
+
+    document.getElementById("scm-login-btn").addEventListener("click", function() {
+      if (scmLoggedIn) {
+        if (!confirm("Disconnect from SCM?")) return;
+        fetch("/api/auth/scm-logout", { method: "POST" })
+          .then(function() {
+            scmLoggedIn = false;
+            updateScmBtn();
+          });
+        return;
+      }
+      showScmModal();
+    });
+
+    document.getElementById("scm-modal-cancel").addEventListener("click", function(e) {
+      e.preventDefault();
+      hideScmModal();
+    });
+
+    document.getElementById("scm-modal-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var username = document.getElementById("scm-modal-username").value;
+      var password = document.getElementById("scm-modal-password").value;
+      var msgEl = document.getElementById("scm-modal-msg");
+      var submitBtn = document.getElementById("scm-modal-submit");
+      msgEl.textContent = "";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Connecting…";
+      fetch("/api/auth/scm-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username, password: password })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success && data.mfaRequired) {
+            localStorage.setItem("scmUsername", username);
+            document.getElementById("scm-modal-form").style.display = "none";
+            document.getElementById("scm-mfa-box").style.display = "block";
+            document.getElementById("scm-mfa-code").focus();
+          } else if (data.success) {
+            localStorage.setItem("scmUsername", username);
+            scmLoggedIn = true;
+            updateScmBtn();
+            msgEl.style.color = "var(--success)";
+            msgEl.textContent = data.message || "Connected.";
+            setTimeout(function() {
+              hideScmModal();
+              if (pendingScmAction) { var fn = pendingScmAction; pendingScmAction = null; fn(); }
+            }, 800);
+          } else {
+            msgEl.style.color = "var(--danger)";
+            msgEl.textContent = data.message || "Connection failed";
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Connect";
+          }
+        })
+        .catch(function() {
+          msgEl.style.color = "var(--danger)";
+          msgEl.textContent = "Network error";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Connect";
+        });
+    });
+
+    document.getElementById("scm-mfa-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var code = document.getElementById("scm-mfa-code").value;
+      var msgEl = document.getElementById("scm-mfa-msg");
+      var submitBtn = document.getElementById("scm-mfa-submit");
+      msgEl.textContent = "";
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Verifying…";
+      fetch("/api/auth/scm-mfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            scmLoggedIn = true;
+            updateScmBtn();
+            msgEl.style.color = "var(--success)";
+            msgEl.textContent = data.message || "Connected.";
+            setTimeout(function() {
+              hideScmModal();
+              if (pendingScmAction) { var fn = pendingScmAction; pendingScmAction = null; fn(); }
+            }, 800);
+          } else {
+            msgEl.style.color = "var(--danger)";
+            msgEl.textContent = data.message || "Verification failed";
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Verify";
+          }
+        })
+        .catch(function() {
+          msgEl.style.color = "var(--danger)";
+          msgEl.textContent = "Network error";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Verify";
+        });
+    });
+
+    // Manage Users section
+    var usersBtn = document.getElementById("users-btn");
+    var usersSection = document.getElementById("users-section");
+
+    function buildRolePermTable(currentPerms) {
+      var html = '';
+      AREAS.forEach(function(area) {
+        var cur = (currentPerms && currentPerms[area]) || 'none';
+        html += '<tr><td style="padding:4px 8px;">' + AREA_LABELS[area] + '</td>';
+        ['none','view','full'].forEach(function(level) {
+          html += '<td style="text-align:center;padding:4px 8px;"><input type="radio" name="perm_' + area + '" value="' + level + '"' + (cur === level ? ' checked' : '') + '></td>';
+        });
+        html += '</tr>';
+      });
+      document.getElementById('role-perms-tbody').innerHTML = html;
+    }
+
+    function resetRoleForm() {
+      document.getElementById('role-edit-id').value = '';
+      document.getElementById('role-name-input').value = '';
+      document.getElementById('role-form-heading').textContent = 'Create new role';
+      document.getElementById('role-submit-btn').textContent = 'Create role';
+      document.getElementById('role-cancel-btn').style.display = 'none';
+      document.getElementById('role-form-msg').textContent = '';
+      buildRolePermTable({});
+    }
+
+    function loadRolesList() {
+      var el = document.getElementById('roles-list-content');
+      el.textContent = 'Loading…';
+      fetch('/api/roles')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.roles || data.roles.length === 0) {
+            el.innerHTML = '<p style="color:var(--muted);margin:0;">No roles defined yet.</p>';
+            return;
+          }
+          var html = '<table class="data-table"><thead><tr><th style="text-align:left;">Name</th>';
+          AREAS.forEach(function(a) { html += '<th style="text-align:center;font-size:0.8rem;">' + AREA_LABELS[a] + '</th>'; });
+          html += '<th></th></tr></thead><tbody>';
+          data.roles.forEach(function(role) {
+            html += '<tr><td style="padding:4px 8px;">' + role.name + '</td>';
+            AREAS.forEach(function(a) {
+              var lv = role.permissions[a] || 'none';
+              var col = lv === 'full' ? 'var(--success)' : lv === 'view' ? 'var(--accent)' : 'var(--muted)';
+              html += '<td style="text-align:center;padding:4px 8px;color:' + col + ';font-size:0.85rem;">' + lv + '</td>';
+            });
+            html += '<td style="padding:4px 8px;white-space:nowrap;">';
+            if (userPermissions.users === 'full') {
+              html += '<button class="btn btn-sm" style="margin-right:0.25rem;" onclick="editRole(\'' + role.id + '\',\'' + encodeURIComponent(JSON.stringify(role)) + '\')">Edit</button>';
+              html += '<button class="btn btn-danger btn-sm" onclick="deleteRole(\'' + role.id + '\')">Delete</button>';
+            }
+            html += '</td></tr>';
+          });
+          html += '</tbody></table>';
+          el.innerHTML = html;
+        })
+        .catch(function() { el.textContent = 'Failed to load roles.'; });
+    }
+
+    window.editRole = function(id, encodedRole) {
+      var role = JSON.parse(decodeURIComponent(encodedRole));
+      document.getElementById('role-edit-id').value = id;
+      document.getElementById('role-name-input').value = role.name;
+      document.getElementById('role-form-heading').textContent = 'Edit role: ' + role.name;
+      document.getElementById('role-submit-btn').textContent = 'Save changes';
+      document.getElementById('role-cancel-btn').style.display = '';
+      document.getElementById('role-form-msg').textContent = '';
+      buildRolePermTable(role.permissions);
+      document.getElementById('role-form').scrollIntoView({ behavior: 'smooth' });
+    };
+
+    window.deleteRole = function(id) {
+      if (!confirm('Delete this role?')) return;
+      fetch('/api/roles/' + id, { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) { loadRolesList(); loadUsersList(); }
+          else alert(data.message);
+        });
+    };
+
+    document.getElementById('role-cancel-btn').addEventListener('click', resetRoleForm);
+
+    document.getElementById('role-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      var name = document.getElementById('role-name-input').value.trim();
+      var editId = document.getElementById('role-edit-id').value;
+      var permissions = {};
+      AREAS.forEach(function(area) {
+        var checked = document.querySelector('input[name="perm_' + area + '"]:checked');
+        permissions[area] = checked ? checked.value : 'none';
+      });
+      var msgEl = document.getElementById('role-form-msg');
+      msgEl.textContent = '';
+      fetch(editId ? '/api/roles/' + editId : '/api/roles', {
+        method: editId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name, permissions: permissions })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            msgEl.style.color = 'var(--success)';
+            msgEl.textContent = editId ? 'Role updated.' : 'Role created.';
+            resetRoleForm();
+            loadRolesList();
+            loadUsersList();
+          } else {
+            msgEl.style.color = 'var(--danger)';
+            msgEl.textContent = data.message || 'Failed';
+          }
+        })
+        .catch(function() { msgEl.style.color = 'var(--danger)'; msgEl.textContent = 'Network error'; });
+    });
+
+    window.addUserRole = function(email, roleId) {
+      if (!roleId) return;
+      fetch('/api/users/' + encodeURIComponent(email) + '/roles/' + encodeURIComponent(roleId), { method: 'POST' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) { if (data.success) loadUsersList(); else alert(data.message); });
+    };
+
+    window.removeUserRole = function(email, roleId) {
+      fetch('/api/users/' + encodeURIComponent(email) + '/roles/' + encodeURIComponent(roleId), { method: 'DELETE' })
+        .then(function(r) { return r.json(); })
+        .then(function(data) { if (data.success) loadUsersList(); else alert(data.message); });
+    };
+
+    function loadUsersList() {
+      var el = document.getElementById("users-list-content");
+      el.textContent = "Loading…";
+      Promise.all([fetch("/api/users").then(function(r){return r.json();}), fetch("/api/roles").then(function(r){return r.json();})])
+        .then(function(results) {
+          var data = results[0], rolesData = results[1];
+          var allRoles = rolesData.roles || [];
+          if (!data.users || data.users.length === 0) { el.textContent = "No users found."; return; }
+          var canEdit = userPermissions.users === 'full';
+          var table = "<table class='data-table'><thead><tr><th>Email</th><th>Created</th><th>Roles</th>" + (canEdit ? "<th></th>" : "") + "</tr></thead><tbody>";
+          data.users.forEach(function(u) {
+            var userRoleIds = u.roles || [];
+            var roleTags = userRoleIds.map(function(rid) {
+              var r = allRoles.find(function(r){return r.id===rid;});
+              var name = r ? r.name : rid;
+              return canEdit
+                ? "<span class='role-tag'>" + name + " <button class='role-tag-remove' onclick='removeUserRole(\"" + u.email + "\",\"" + rid + "\")'>×</button></span>"
+                : "<span class='role-tag'>" + name + "</span>";
+            }).join(' ');
+            var addRoleSelect = '';
+            if (canEdit) {
+              var availableRoles = allRoles.filter(function(r){return !userRoleIds.includes(r.id);});
+              if (availableRoles.length > 0) {
+                addRoleSelect = '<select onchange="addUserRole(\'' + u.email + '\',this.value);this.value=\'\'" style="font-size:0.8rem;padding:2px 4px;margin-left:0.25rem;"><option value="">+ Add role</option>';
+                availableRoles.forEach(function(r) { addRoleSelect += '<option value="' + r.id + '">' + r.name + '</option>'; });
+                addRoleSelect += '</select>';
+              }
+            }
+            table += "<tr><td>" + u.email + "</td><td>" + new Date(u.createdAt).toLocaleDateString() + "</td><td>" + roleTags + addRoleSelect + "</td>";
+            if (canEdit) table += "<td><button class='btn btn-danger btn-sm' onclick='deleteUser(\"" + u.email + "\")'>Delete</button></td>";
+            table += "</tr>";
+          });
+          table += "</tbody></table>";
+          el.innerHTML = table;
+        })
+        .catch(function() { el.textContent = "Failed to load users."; });
+    }
+
+    window.deleteUser = function(email) {
+      if (!confirm("Delete user " + email + "?")) return;
+      fetch("/api/users/" + encodeURIComponent(email), { method: "DELETE" })
+        .then(function(r) { return r.json(); })
+        .then(function(data) { if (data.success) loadUsersList(); else alert(data.message); })
+        .catch(function() { alert("Network error"); });
+    };
+
+    usersBtn.addEventListener("click", function() {
+      var wasVisible = usersSection.style.display === "block";
+      hideAllSections();
+      usersSection.style.display = wasVisible ? "none" : "block";
+      if (usersSection.style.display === "block") { loadUsersList(); loadRolesList(); buildRolePermTable({}); }
+    });
+
+    // Invite toggle: show/hide password field and change button label
+    document.getElementById("invite-toggle").addEventListener("change", function() {
+      var inviteMode = this.checked;
+      var pwGroup = document.getElementById("new-user-password-group");
+      var pwInput = document.getElementById("new-user-password");
+      var submitBtn = document.getElementById("create-user-submit");
+      pwGroup.style.display = inviteMode ? "none" : "";
+      pwInput.required = !inviteMode;
+      submitBtn.textContent = inviteMode ? "Create & preview invite" : "Create user";
+    });
+
+    var _inviteEmail = "";
+
+    document.getElementById("create-user-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var email = document.getElementById("new-user-email").value;
+      var password = document.getElementById("new-user-password").value;
+      var inviteMode = document.getElementById("invite-toggle").checked;
+      var msgEl = document.getElementById("create-user-msg");
+      msgEl.textContent = "";
+
+      var payload = inviteMode
+        ? { email: email, invite: true }
+        : { email: email, password: password };
+
+      fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success && data.invite && data.draftEmail) {
+            _inviteEmail = email;
+            document.getElementById("invite-subject").value = data.draftEmail.subject;
+            document.getElementById("invite-body").value = data.draftEmail.body;
+            document.getElementById("invite-preview").style.display = "block";
+            document.getElementById("invite-msg").textContent = "";
+            msgEl.textContent = "Account created. Review the invite email below.";
+            loadUsersList();
+          } else {
+            msgEl.textContent = data.message || (data.success ? "User created" : "Failed");
+            if (data.success) { this.reset(); loadUsersList(); }
+          }
+        }.bind(this))
+        .catch(function() { msgEl.textContent = "Network error"; });
+    });
+
+    document.getElementById("invite-send-btn").addEventListener("click", function() {
+      var subject = document.getElementById("invite-subject").value.trim();
+      var body = document.getElementById("invite-body").value.trim();
+      var msgEl = document.getElementById("invite-msg");
+      if (!subject || !body) { msgEl.textContent = "Subject and message are required."; return; }
+      this.disabled = true;
+      this.textContent = "Sending…";
+      fetch("/api/users/" + encodeURIComponent(_inviteEmail) + "/send-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: subject, body: body })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          document.getElementById("invite-send-btn").disabled = false;
+          document.getElementById("invite-send-btn").textContent = "Send invite";
+          msgEl.style.color = data.success ? "var(--success)" : "var(--danger)";
+          msgEl.textContent = data.success ? "Invitation sent." : (data.message || "Failed to send.");
+          if (data.success) {
+            setTimeout(function() {
+              document.getElementById("invite-preview").style.display = "none";
+              document.getElementById("create-user-form").reset();
+              document.getElementById("new-user-password-group").style.display = "";
+              document.getElementById("new-user-password").required = true;
+              document.getElementById("create-user-submit").textContent = "Create user";
+              document.getElementById("create-user-msg").textContent = "";
+            }, 1500);
+          }
+        })
+        .catch(function() {
+          document.getElementById("invite-send-btn").disabled = false;
+          document.getElementById("invite-send-btn").textContent = "Send invite";
+          msgEl.style.color = "var(--danger)";
+          msgEl.textContent = "Network error";
+        });
+    });
+
+    document.getElementById("invite-cancel-btn").addEventListener("click", function() {
+      document.getElementById("invite-preview").style.display = "none";
+      document.getElementById("create-user-form").reset();
+      document.getElementById("new-user-password-group").style.display = "";
+      document.getElementById("new-user-password").required = true;
+      document.getElementById("create-user-submit").textContent = "Create user";
+      document.getElementById("create-user-msg").textContent = "";
+    });
+
+    document.getElementById("reset-password-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var email = document.getElementById("reset-email").value;
+      var password = document.getElementById("reset-password").value;
+      var msgEl = document.getElementById("reset-password-msg");
+      msgEl.textContent = "";
+      fetch("/api/users/" + encodeURIComponent(email) + "/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: password })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          msgEl.textContent = data.message || (data.success ? "Password updated" : "Failed");
+          if (data.success) this.reset();
+        }.bind(this))
+        .catch(function() { msgEl.textContent = "Network error"; });
+    });
+
+    const tasksBtn = document.getElementById("tasks-btn");
+    const tasksSection = document.getElementById("tasks-section");
+    const tasksContent = document.getElementById("tasks-content");
+
+    tasksBtn.addEventListener("click", () => {
+      requireScmLogin(function() {
+      hideAllSections();
+      tasksSection.style.display = "block";
+      tasksContent.innerHTML = '<span class="text-muted">Loading tasks...</span>';
+
+      fetch("/api/tasks")
+        .then(r => {
+          if (!r.ok) return r.json().then(d => { throw new Error(d.message || "Request failed"); });
+          return r.json();
+        })
+        .then(items => {
+          if (items.length === 0) {
+            tasksContent.innerHTML = "<p>No attention items found.</p>";
+            return;
+          }
+          const ul = document.createElement("ul");
+          ul.className = "tasks-list";
+          items.forEach(item => {
+            const li = document.createElement("li");
+            const a = document.createElement("a");
+            a.href = item.url;
+            a.target = "_blank";
+            a.rel = "noopener";
+            a.textContent = item.text;
+            li.appendChild(a);
+            ul.appendChild(li);
+          });
+          tasksContent.innerHTML = "";
+          tasksContent.appendChild(ul);
+        })
+        .catch(err => {
+          tasksContent.innerHTML = '<span class="text-error">' + err.message + '</span>';
+        });
+      }); // requireScmLogin
+    });
+
+    document.getElementById("clear-cache-btn").addEventListener("click", function() {
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = "Clearing...";
+      fetch("/api/contacts/clear-cache", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.textContent = data.message;
+          setTimeout(function() {
+            btn.textContent = "Clear Cache";
+            btn.disabled = false;
+          }, 2000);
+        })
+        .catch(function(err) {
+          btn.textContent = "Error: " + err.message;
+          btn.disabled = false;
+        });
+    });
+
+    const dupBtn = document.getElementById("duplicates-btn");
+    const dupSection = document.getElementById("duplicates-section");
+    const dupContent = document.getElementById("duplicates-content");
+    const SCM_URL = "https://exesc.clubmin.net";
+
+    dupBtn.addEventListener("click", () => {
+      requireScmLogin(function() {
+      hideAllSections();
+      dupSection.style.display = "block";
+      dupBtn.disabled = true;
+      dupContent.innerHTML = '<span class="text-muted">Scanning all contacts... this may take a minute</span>';
+
+      fetch("/api/contacts/duplicates")
+        .then(r => {
+          if (!r.ok) return r.json().then(d => { throw new Error(d.message || "Request failed"); });
+          return r.json();
+        })
+        .then(data => {
+          dupBtn.disabled = false;
+          var total = data.definiteGroups.length + data.possibleGroups.length;
+          if (total === 0) {
+            dupContent.innerHTML = "<p>No duplicate contacts found among " + data.totalContacts + " contacts.</p>";
+            return;
+          }
+          var html = "<p style='margin-bottom:1rem;font-size:0.88rem;color:var(--muted);'>Scanned " + data.totalContacts + " contacts.</p>";
+          html += renderSection("Definite Duplicates", data.definiteGroups, true);
+          html += renderSection("Possible Duplicates", data.possibleGroups, true);
+          dupContent.innerHTML = html;
+        })
+        .catch(err => {
+          dupBtn.disabled = false;
+          dupContent.innerHTML = '<span class="text-error">' + err.message + '</span>';
+        });
+      }); // requireScmLogin
+    });
+
+    // ── Repair Contact Names ──────────────────────────────────────────────
+    const nameRepairBtn = document.getElementById("name-repair-btn");
+    const nameRepairSection = document.getElementById("name-repair-section");
+    const nameRepairRunBtn = document.getElementById("name-repair-run-btn");
+    const nameRepairResult = document.getElementById("name-repair-result");
+
+    nameRepairBtn.addEventListener("click", function() {
+      hideAllSections();
+      nameRepairSection.style.display = "block";
+    });
+
+    nameRepairRunBtn.addEventListener("click", function() {
+      nameRepairRunBtn.disabled = true;
+      nameRepairRunBtn.textContent = "Checking…";
+      nameRepairResult.innerHTML = "";
+
+      fetch("/api/contacts/name-issues")
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          nameRepairRunBtn.disabled = false;
+          nameRepairRunBtn.textContent = "Check Names";
+          if (!data.success) {
+            nameRepairResult.innerHTML = "<p style='color:var(--danger);'>" + esc(data.message) + "</p>";
+            return;
+          }
+          if (data.total === 0) {
+            nameRepairResult.innerHTML = "<p style='color:var(--success);'>No name issues found.</p>";
+            return;
+          }
+          var html = "<p style='margin-bottom:0.75rem;font-size:0.88rem;'><strong>" + data.total + "</strong> contact(s) with name issues:</p>";
+          html += "<table class='data-table'><thead><tr><th>Exclude</th><th>Contact</th><th>Field</th><th>Current value</th><th>Suggested</th><th>Issues</th></tr></thead><tbody>";
+          data.issues.forEach(function(row) {
+            var link = '<a href="https://exesc.clubmin.net/contacts/' + esc(row.id) + '" target="_blank" rel="noopener">' + esc(row.name) + '</a>';
+            var fields = [["First name", row.firstName], ["Last name", row.lastName]].filter(function(p) { return !!p[1]; });
+            var rowspan = fields.length;
+            fields.forEach(function(pair, fi) {
+              var label = pair[0], issue = pair[1];
+              html += "<tr>";
+              if (fi === 0) {
+                html += "<td rowspan='" + rowspan + "' style='text-align:center;vertical-align:middle;'><input type='checkbox' id='exclude-" + esc(row.id) + "' title='Exclude from export'></td>";
+                html += "<td rowspan='" + rowspan + "'>" + link + "</td>";
+              }
+              html += "<td style='white-space:nowrap;'>" + label + "</td>";
+              html += "<td><code>" + esc(JSON.stringify(issue.currentValue)) + "</code></td>";
+              html += "<td><code>" + esc(issue.suggested) + "</code></td>";
+              html += "<td style='font-size:0.82rem;color:var(--muted);'>" + esc(issue.issues.join(", ")) + "</td>";
+              html += "</tr>";
+            });
+          });
+          html += "</tbody></table>";
+          html += "<div style='margin-top:0.75rem;display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;'>";
+          html += "<button class='merge-btn' id='name-repair-exclude-all-btn' style='background:var(--neutral);'>Exclude All</button>";
+          html += "<button class='merge-btn' id='name-repair-download-btn'>Download CSV</button>";
+          html += "<button class='merge-btn' id='name-repair-import-btn'>Import to SCM</button>";
+          html += "<button class='merge-btn' id='name-repair-apply-btn' style='background:var(--purple);'>Apply Fixes</button>";
+          html += "</div>";
+          html += "<div id='name-repair-import-result' style='margin-top:0.5rem;'></div>";
+          nameRepairResult.innerHTML = html;
+
+          function buildCsvRows() {
+            var rows = [["uid", "first_name", "last_name"]];
+            data.issues.forEach(function(row) {
+              var excludeEl = document.getElementById("exclude-" + row.id);
+              if (excludeEl && excludeEl.checked) return;
+              var firstName = row.firstName ? row.firstName.suggested : row.originalFirstName;
+              var lastName  = row.lastName  ? row.lastName.suggested  : row.originalLastName;
+              rows.push([row.id, firstName, lastName]);
+            });
+            return rows;
+          }
+          function buildCsv(rows) {
+            return rows.map(function(r) {
+              return r.map(function(f) { return '"' + String(f).replace(/"/g, '""') + '"'; }).join(",");
+            }).join("\r\n");
+          }
+
+          document.getElementById("name-repair-exclude-all-btn").addEventListener("click", function() {
+            document.querySelectorAll('[id^="exclude-"]').forEach(function(cb) {
+              cb.checked = true;
+            });
+          });
+
+          document.getElementById("name-repair-download-btn").addEventListener("click", function() {
+            var blob = new Blob([buildCsv(buildCsvRows())], { type: "text/csv" });
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "contact-name-repairs.csv";
+            a.click();
+            URL.revokeObjectURL(a.href);
+          });
+
+          document.getElementById("name-repair-import-btn").addEventListener("click", function() {
+            var importBtn = document.getElementById("name-repair-import-btn");
+            var importResult = document.getElementById("name-repair-import-result");
+            importBtn.disabled = true;
+            importBtn.textContent = "Preparing\u2026";
+            importResult.innerHTML = "";
+
+            fetch("/api/contacts/import-names/prepare", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ csv: buildCsv(buildCsvRows()) })
+            })
+              .then(function(r) { return r.json(); })
+              .then(function(resp) {
+                importBtn.disabled = false;
+                importBtn.textContent = "Import to SCM";
+                if (!resp.success) {
+                  importResult.innerHTML = "<span style='color:var(--danger);font-size:0.88rem;'>" + esc(resp.message) + "</span>";
+                  return;
+                }
+                // Show confirm/cancel controls
+                importResult.innerHTML =
+                  "<div style='display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;'>" +
+                  "<span style='font-size:0.88rem;color:var(--muted);'>Review the browser window, then:</span>" +
+                  "<button class='merge-btn' id='name-repair-confirm-btn'>Confirm Import</button>" +
+                  "<button id='name-repair-cancel-btn' style='background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.83rem;'>Cancel</button>" +
+                  "</div>" +
+                  "<div id='name-repair-confirm-result' style='margin-top:0.4rem;'></div>";
+
+                document.getElementById("name-repair-confirm-btn").addEventListener("click", function() {
+                  var confirmBtn = document.getElementById("name-repair-confirm-btn");
+                  var confirmResult = document.getElementById("name-repair-confirm-result");
+                  confirmBtn.disabled = true;
+                  confirmBtn.textContent = "Importing\u2026";
+                  fetch("/api/contacts/import-names/confirm", { method: "POST" })
+                    .then(function(r) { return r.json(); })
+                    .then(function(r2) {
+                      importResult.innerHTML = r2.success
+                        ? "<span style='color:var(--success);font-size:0.88rem;'>\u2713 " + esc(r2.message) + "</span>"
+                        : "<span style='color:var(--danger);font-size:0.88rem;'>" + esc(r2.message) + "</span>";
+                    })
+                    .catch(function(err) {
+                      confirmBtn.disabled = false;
+                      confirmBtn.textContent = "Confirm Import";
+                      confirmResult.innerHTML = "<span style='color:var(--danger);font-size:0.88rem;'>Error: " + esc(err.message) + "</span>";
+                    });
+                });
+
+                document.getElementById("name-repair-cancel-btn").addEventListener("click", function() {
+                  fetch("/api/contacts/import-names/cancel", { method: "POST" });
+                  importResult.innerHTML = "<span style='font-size:0.88rem;color:var(--muted);'>Import cancelled.</span>";
+                });
+              })
+              .catch(function(err) {
+                importBtn.disabled = false;
+                importBtn.textContent = "Import to SCM";
+                importResult.innerHTML = "<span style='color:var(--danger);font-size:0.88rem;'>Error: " + esc(err.message) + "</span>";
+              });
+          });
+
+          document.getElementById("name-repair-apply-btn").addEventListener("click", function() {
+            var applyBtn = document.getElementById("name-repair-apply-btn");
+            var importResult = document.getElementById("name-repair-import-result");
+            applyBtn.disabled = true;
+            applyBtn.textContent = "Applying\u2026";
+            importResult.innerHTML = "";
+
+            fetch("/api/contacts/import-names/apply", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ csv: buildCsv(buildCsvRows()) })
+            })
+              .then(function(r) { return r.json(); })
+              .then(function(resp) {
+                applyBtn.disabled = false;
+                applyBtn.textContent = "Apply Fixes";
+                importResult.innerHTML = resp.success
+                  ? "<span style='color:var(--success);font-size:0.88rem;'>\u2713 " + esc(resp.message) + "</span>"
+                  : "<span style='color:var(--danger);font-size:0.88rem;'>" + esc(resp.message) + "</span>";
+              })
+              .catch(function(err) {
+                applyBtn.disabled = false;
+                applyBtn.textContent = "Apply Fixes";
+                importResult.innerHTML = "<span style='color:var(--danger);font-size:0.88rem;'>Error: " + esc(err.message) + "</span>";
+              });
+          });
+        })
+        .catch(function(err) {
+          nameRepairRunBtn.disabled = false;
+          nameRepairRunBtn.textContent = "Check Names";
+          nameRepairResult.innerHTML = "<p style='color:var(--danger);'>Error: " + esc(err.message) + "</p>";
+        });
+    });
+
+    var groupContactsMap = {};
+
+    function renderSection(title, groups, showMerge) {
+      if (groups.length === 0) return "";
+      var slug = title.replace(/\s+/g, "-").toLowerCase();
+      var isPossible = title.toLowerCase().indexOf("possible") !== -1;
+      var html = "<h3 id='section-heading-" + slug + "' style='font-size:0.9rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin:1rem 0 0.75rem;'>" + esc(title) + " (<span id='section-count-" + slug + "'>" + groups.length + "</span>)</h3>";
+      if (isPossible) {
+        html += "<div id='section-warning-" + slug + "' style='font-size:0.83rem;color:#744210;background:#fffbeb;padding:0.5rem 0.85rem;border-radius:6px;margin-bottom:0.75rem;border-left:3px solid #e9991a;'>";
+        html += "&#9888; These pairs share similar names but have no matching email or phone number. Check carefully before merging &mdash; they may be different people.";
+        html += "</div>";
+      }
+      html += "<div id='section-groups-" + slug + "'>";
+      groups.forEach(function(group, gi) {
+        var groupId = slug + "-" + gi;
+        if (showMerge && group.contacts.length >= 2) {
+          var suggestedIdx = typeof group.suggestedPrimaryIdx === "number" ? group.suggestedPrimaryIdx : 0;
+          groupContactsMap[groupId] = { contacts: group.contacts, primaryIdx: suggestedIdx };
+        }
+        html += '<div class="dup-group" id="group-' + groupId + '">';
+
+        if (isPossible && group.reason) {
+          html += "<div style='font-size:0.8rem;color:#744210;background:#fffbeb;padding:0.35rem 0.65rem;border-radius:4px;margin-bottom:0.5rem;border-left:3px solid #e9991a;'>";
+          html += "&#9888; " + esc(group.reason);
+          html += "</div>";
+        }
+
+        if (showMerge && group.contacts.length === 2) {
+          var pidx = groupContactsMap[groupId].primaryIdx;
+          var primaryContact = group.contacts[pidx];
+          var primaryReason = primaryContact.membershipStatus && primaryContact.membershipStatus.toLowerCase() === "active"
+            ? "active membership"
+            : (group.contacts[pidx === 0 ? 1 : 0].membershipStatus && group.contacts[pidx === 0 ? 1 : 0].membershipStatus.toLowerCase() === "active"
+              ? "no active membership (auto-selected)"
+              : "older record");
+          html += "<div style='display:flex;align-items:center;gap:0.6rem;margin-bottom:0.4rem;font-size:0.82rem;color:var(--muted);'>";
+          html += "Primary: <strong id='primary-name-" + groupId + "'>" + esc(primaryContact.name) + "</strong>";
+          html += " <span id='primary-reason-" + groupId + "' style='font-size:0.75rem;color:var(--muted);font-style:italic;'>(" + esc(primaryReason) + ")</span>";
+          html += " <button class='swap-btn' onclick='swapPrimary(\"" + groupId + "\")'>&#8644; Swap</button>";
+          html += "</div>";
+        }
+
+        html += '<table class="data-table"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Tags</th></tr></thead>';
+        html += "<tbody id='tbody-" + groupId + "'>";
+        group.contacts.forEach(function(c, ci) {
+          var badge = "";
+          if (showMerge && group.contacts.length === 2) {
+            var isPrimary = ci === groupContactsMap[groupId].primaryIdx;
+            badge = isPrimary
+              ? "<span class='role-tag' style='background:var(--accent);color:#fff;' id='badge-" + groupId + "-" + ci + "'>Primary</span> "
+              : "<span class='role-tag' style='background:#718096;color:#fff;' id='badge-" + groupId + "-" + ci + "'>Secondary</span> ";
+          }
+          var nameCell = c.id
+            ? '<a href="' + SCM_URL + '/contacts/' + c.id + '" target="_blank" rel="noopener">' + esc(c.name) + '</a>'
+            : esc(c.name);
+          var tagsHtml = (c.tags && c.tags.length > 0)
+            ? c.tags.map(function(t) { return "<span class='role-tag'>" + esc(t) + "</span>"; }).join(" ")
+            : "";
+          html += "<tr data-ci='" + ci + "'><td>" + badge + nameCell + "</td><td>" + esc(c.email) + "</td><td>" + esc(c.phone) + "</td><td>" + tagsHtml + "</td></tr>";
+        });
+        html += "</tbody></table>";
+        if (showMerge && group.contacts.length >= 2) {
+          html += "<div style='margin-top:0.4rem;'><button class='merge-btn' id='preview-btn-" + groupId + "' onclick='doPreview(\"" + groupId + "\")'>Preview Merge</button></div>";
+          html += "<div id='preview-panel-" + groupId + "' style='display:none;'></div>";
+        }
+        if (group.contacts.length >= 1 && group.contacts[0].id) {
+          html += "<div style='margin-top:0.4rem;'><button class='merge-btn' style='background:#718096;' onclick='doMarkNonDuplicate(\"" + groupId + "\", \"" + group.contacts[0].id + "\")'>Not a Duplicate</button></div>";
+        }
+        html += "<div class='merge-result' id='result-" + groupId + "' style='display:none;'></div></div>";
+      });
+      html += "</div>";
+      return html;
+    }
+
+    function updateSectionCount(slug) {
+      var container = document.getElementById("section-groups-" + slug);
+      var countEl = document.getElementById("section-count-" + slug);
+      if (!container || !countEl) return;
+      var remaining = container.querySelectorAll(".dup-group").length;
+      countEl.textContent = remaining;
+      if (remaining === 0) {
+        var heading = document.getElementById("section-heading-" + slug);
+        if (heading) heading.style.display = "none";
+        var warning = document.getElementById("section-warning-" + slug);
+        if (warning) warning.style.display = "none";
+      }
+    }
+
+    function swapPrimary(groupId) {
+      var gd = groupContactsMap[groupId];
+      gd.primaryIdx = gd.primaryIdx === 0 ? 1 : 0;
+      var primary = gd.contacts[gd.primaryIdx];
+      var el = document.getElementById("primary-name-" + groupId);
+      if (el) el.textContent = primary.name;
+      var reasonEl = document.getElementById("primary-reason-" + groupId);
+      if (reasonEl) reasonEl.textContent = "(manually selected)";
+      [0, 1].forEach(function(ci) {
+        var badge = document.getElementById("badge-" + groupId + "-" + ci);
+        if (!badge) return;
+        if (ci === gd.primaryIdx) { badge.textContent = "Primary"; badge.style.background = "var(--accent)"; }
+        else { badge.textContent = "Secondary"; badge.style.background = "#718096"; }
+      });
+      document.getElementById("preview-panel-" + groupId).style.display = "none";
+      document.getElementById("result-" + groupId).style.display = "none";
+    }
+
+    function doMarkNonDuplicate(groupId, contactId) {
+      var btn = document.querySelector("#group-" + groupId + " button[onclick*='doMarkNonDuplicate']");
+      if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+      fetch("/api/contacts/mark-non-duplicate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId: contactId })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            var card = document.getElementById("group-" + groupId);
+            if (card) {
+              var sc = card.closest("[id^='section-groups-']");
+              card.remove();
+              if (sc) updateSectionCount(sc.id.replace("section-groups-", ""));
+            }
+          } else {
+            if (btn) { btn.disabled = false; btn.textContent = "Not a Duplicate"; }
+            alert("Error: " + (data.message || "Unknown error"));
+          }
+        })
+        .catch(function(err) {
+          if (btn) { btn.disabled = false; btn.textContent = "Not a Duplicate"; }
+          alert("Error: " + err.message);
+        });
+    }
+
+    function doPreview(groupId) {
+      var gd = groupContactsMap[groupId];
+      var primary = gd.contacts[gd.primaryIdx];
+      var secondary = gd.contacts[gd.primaryIdx === 0 ? 1 : 0];
+      var btn = document.getElementById("preview-btn-" + groupId);
+      var panel = document.getElementById("preview-panel-" + groupId);
+      btn.disabled = true;
+      btn.textContent = "Loading\u2026";
+      panel.style.display = "none";
+      document.getElementById("result-" + groupId).style.display = "none";
+
+      fetch("/api/contacts/merge/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryId: primary.id, secondaryId: secondary.id, secondaryName: secondary.name })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.disabled = false;
+          btn.textContent = "Preview Merge";
+          var hasConflicts = data.rows && data.rows.some(function(row) { return row.hasConflict; });
+          var html = "<div style='margin-top:0.5rem;padding:0.75rem 1rem;background:#f7fafc;border-radius:6px;border:1px solid #e2e8f0;'>";
+          html += "<p style='font-size:0.82rem;margin:0 0 0.4rem;'><strong>Merging:</strong> " + esc(secondary.name) + " \u2192 <strong>" + esc(primary.name) + "</strong></p>";
+          if (data.warning) {
+            html += "<p style='font-size:0.8rem;color:#744210;background:#fffbeb;padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem;'>&#9888; SCM warning: " + esc(data.warning) + "</p>";
+          }
+          html += "<p style='font-size:0.8rem;color:var(--muted);margin:0 0 0.6rem;'>&#9888; If both contacts have SCM logons, disable one before confirming.</p>";
+          if (data.canProceed) {
+            html += "<div style='display:flex;gap:0.5rem;align-items:center;margin-bottom:0.75rem;'>";
+            html += "<button class='merge-btn' id='confirm-btn-" + groupId + "' onclick='doConfirmMerge(\"" + groupId + "\")'>Confirm Merge</button>";
+            html += "<button onclick='document.getElementById(\"preview-panel-" + groupId + "\").style.display=\"none\"' style='background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.83rem;'>Cancel</button>";
+            html += "</div>";
+          }
+          if (data.rows && data.rows.length > 0) {
+            html += "<table style='border-collapse:collapse;width:100%;font-size:0.82rem;margin-bottom:0.75rem;'>";
+            html += "<thead><tr style='background:#edf2f7;'><th style='padding:4px 8px;text-align:left;'>Field</th><th style='padding:4px 8px;text-align:left;'>Primary value</th><th style='padding:4px 8px;text-align:left;'>Merged result</th><th style='padding:4px 8px;text-align:left;'>Secondary value</th></tr></thead><tbody>";
+            data.rows.forEach(function(row) {
+              var rowBg = row.hasConflict ? "background:#fff5f5;" : "";
+              var note = row.hasConflict ? " <span style='color:#c53030;font-size:0.72rem;'>not merged</span>" : "";
+              html += "<tr style='" + rowBg + "'>";
+              html += "<td style='padding:3px 8px;border-bottom:1px solid #f0f4f8;font-weight:500;'>" + esc(row.field) + "</td>";
+              html += "<td style='padding:3px 8px;border-bottom:1px solid #f0f4f8;'>" + esc(row.primaryValue) + "</td>";
+              html += "<td style='padding:3px 8px;border-bottom:1px solid #f0f4f8;'>" + esc(row.mergedValue) + "</td>";
+              html += "<td style='padding:3px 8px;border-bottom:1px solid #f0f4f8;'>" + esc(row.secondaryValue) + note + "</td>";
+              html += "</tr>";
+            });
+            html += "</tbody></table>";
+          }
+          if (hasConflicts) {
+            html += "<p style='font-size:0.8rem;color:#744210;background:#fffbeb;padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.6rem;'>Some secondary fields will not be merged because the primary already has a value. This is normal for single-value fields.</p>";
+          }
+          if (!data.canProceed) {
+            html += "<p style='font-size:0.82rem;color:#c53030;'>SCM did not offer a merge option — cannot proceed.</p>";
+            html += "<button onclick='document.getElementById(\"preview-panel-" + groupId + "\").style.display=\"none\"' style='background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.83rem;'>Close</button>";
+          }
+          html += "</div>";
+          panel.innerHTML = html;
+          panel.style.display = "block";
+        })
+        .catch(function(err) {
+          btn.disabled = false;
+          btn.textContent = "Preview Merge";
+          panel.innerHTML = "<div class='merge-result failure'>Error: " + esc(err.message) + "</div>";
+          panel.style.display = "block";
+        });
+    }
+
+    function doConfirmMerge(groupId) {
+      var gd = groupContactsMap[groupId];
+      var primary = gd.contacts[gd.primaryIdx];
+      var secondaryIdx = gd.primaryIdx === 0 ? 1 : 0;
+      var secondary = gd.contacts[secondaryIdx];
+      var btn = document.getElementById("confirm-btn-" + groupId);
+      var panel = document.getElementById("preview-panel-" + groupId);
+      var resultDiv = document.getElementById("result-" + groupId);
+      btn.disabled = true;
+      btn.textContent = "Merging\u2026";
+
+      fetch("/api/contacts/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ primaryId: primary.id, secondaryId: secondary.id, secondaryName: secondary.name })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(resp) {
+          panel.style.display = "none";
+          resultDiv.style.display = "block";
+          if (resp.success) {
+            resultDiv.className = "merge-result success";
+            resultDiv.innerHTML = "<strong>Merged successfully.</strong> " + esc(resp.message) + " Verifying…";
+            fetch("/api/contacts/count-by-name?name=" + encodeURIComponent(primary.name) + "&excludeId=" + encodeURIComponent(secondary.id))
+              .then(function(r) { return r.json(); })
+              .then(function(vr) {
+                if (vr.count === 1) {
+                  resultDiv.innerHTML = "<strong>Merged and verified.</strong> " + esc(resp.message);
+                  setTimeout(function() {
+                    var card = document.getElementById("group-" + groupId);
+                    if (card) {
+                      var sc = card.closest("[id^='section-groups-']");
+                      card.remove();
+                      if (sc) updateSectionCount(sc.id.replace("section-groups-", ""));
+                    }
+                  }, 1500);
+                } else {
+                  resultDiv.innerHTML = "<strong>Merged.</strong> " + esc(resp.message) +
+                    "<br><em style='font-size:0.82rem;color:#b7791f;'>" + (vr.count === 0 ? "Could not verify — no contacts found with this name in cache. Check SCM manually." : vr.count + " contact(s) still found with this name — check SCM manually.") + "</em>";
+                  var tbody = document.getElementById("tbody-" + groupId);
+                  if (tbody) { var srow = tbody.querySelector("tr[data-ci='" + secondaryIdx + "']"); if (srow) srow.remove(); }
+                  var previewBtn = document.getElementById("preview-btn-" + groupId);
+                  previewBtn.textContent = "Merged";
+                  previewBtn.disabled = true;
+                }
+              })
+              .catch(function() {
+                resultDiv.innerHTML = "<strong>Merged successfully.</strong> " + esc(resp.message) +
+                  "<br><em style='font-size:0.82rem;'>Tip: check the merged contact for duplicate addresses, emails, and phone numbers.</em>";
+                var tbody = document.getElementById("tbody-" + groupId);
+                if (tbody) { var srow = tbody.querySelector("tr[data-ci='" + secondaryIdx + "']"); if (srow) srow.remove(); }
+                var previewBtn = document.getElementById("preview-btn-" + groupId);
+                previewBtn.textContent = "Merged";
+                previewBtn.disabled = true;
+              });
+          } else {
+            resultDiv.className = "merge-result failure";
+            resultDiv.textContent = resp.message || "Merge failed";
+            btn.disabled = false;
+            btn.textContent = "Confirm Merge";
+            panel.style.display = "block";
+          }
+        })
+        .catch(function(err) {
+          resultDiv.style.display = "block";
+          resultDiv.className = "merge-result failure";
+          resultDiv.textContent = "Error: " + err.message;
+          btn.disabled = false;
+          btn.textContent = "Confirm Merge";
+          panel.style.display = "block";
+        });
+    }
+
+    const emailIssuesBtn = document.getElementById("email-issues-btn");
+    const emailIssuesSection = document.getElementById("email-issues-section");
+    const emailIssuesContent = document.getElementById("email-issues-content");
+
+    emailIssuesBtn.addEventListener("click", () => {
+      requireScmLogin(function() {
+      hideAllSections();
+      emailIssuesSection.style.display = "block";
+      emailIssuesBtn.disabled = true;
+      emailIssuesContent.innerHTML = '<span class="text-muted">Checking email issues...</span>';
+
+      fetch("/api/email-issues")
+        .then(r => {
+          if (!r.ok) return r.json().then(d => { throw new Error(d.message || "Request failed"); });
+          return r.json();
+        })
+        .then(issues => {
+          emailIssuesBtn.disabled = false;
+          if (issues.length === 0) {
+            emailIssuesContent.innerHTML = "<p>No email issues found.</p>";
+            return;
+          }
+          var html = "<table class='data-table'><thead><tr><th>Name</th><th>Email</th><th>Problem</th></tr></thead><tbody>";
+          issues.forEach(function(issue) {
+            html += "<tr><td>" + esc(issue.name) + "</td><td>" + esc(issue.email) + "</td><td>" + esc(issue.problem) + "</td></tr>";
+          });
+          html += "</tbody></table>";
+          html += '<button class="btn btn-accent btn-sm" style="margin-top:1rem;" onclick="downloadEmailIssuesCSV()">Download CSV</button>';
+          emailIssuesContent.innerHTML = html;
+          emailIssuesContent._issues = issues;
+        })
+        .catch(err => {
+          emailIssuesBtn.disabled = false;
+          emailIssuesContent.innerHTML = '<span class="text-error">' + err.message + '</span>';
+        });
+    });
+
+    function downloadEmailIssuesCSV() {
+      var issues = emailIssuesContent._issues;
+      if (!issues || issues.length === 0) return;
+      var rows = [["Name", "Email", "Problem"]];
+      issues.forEach(function(issue) {
+        rows.push([issue.name, issue.email, issue.problem]);
+      });
+      var csv = rows.map(function(row) {
+        return row.map(function(cell) {
+          var s = (cell == null ? "" : String(cell)).replace(/"/g, '""');
+          return '"' + s + '"';
+        }).join(",");
+      }).join("\n");
+      var blob = new Blob([csv], { type: "text/csv" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "email-issues.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("fix-email-issues-btn").addEventListener("click", function() {
+      var btn = this;
+      if (!confirm("This will reset all contacts with email issues on SCM. Continue?")) return;
+      btn.disabled = true;
+      btn.textContent = "Fixing...";
+      fetch("/api/email-issues/reset", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.textContent = data.message || (data.success ? "Done" : "Failed");
+          setTimeout(function() {
+            btn.textContent = "Fix Email Issues";
+            btn.disabled = false;
+          }, 3000);
+        })
+        .catch(function(err) {
+          btn.textContent = "Error: " + err.message;
+          setTimeout(function() {
+            btn.textContent = "Fix Email Issues";
+            btn.disabled = false;
+          }, 3000);
+        });
+      }); // requireScmLogin
+    });
+
+    document.getElementById("minutes-btn").addEventListener("click", function() {
+      requireScmLogin(function() {
+        hideAllSections();
+        document.getElementById("minutes-section").style.display = "block";
+      });
+    });
+
+    document.getElementById("minutes-browse-btn").addEventListener("click", function() {
+      document.getElementById("minutes-file-input").click();
+    });
+
+    document.getElementById("minutes-file-input").addEventListener("change", function() {
+      var files = Array.from(this.files).filter(function(f) {
+        return f.name.toLowerCase().endsWith(".pdf");
+      });
+      var label = document.getElementById("minutes-file-label");
+      if (files.length === 0) {
+        label.textContent = "No folder selected";
+      } else {
+        var folderName = (files[0].webkitRelativePath || files[0].name).split("/")[0];
+        label.textContent = folderName + " \u2014 " + files.length + " PDF" + (files.length !== 1 ? "s" : "") + " selected";
+      }
+    });
+
+    document.getElementById("minutes-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      var submitBtn = document.getElementById("minutes-submit");
+      var minutesResult = document.getElementById("minutes-result");
+      var fileInput = document.getElementById("minutes-file-input");
+      var files = Array.from(fileInput.files).filter(function(f) {
+        return f.name.toLowerCase().endsWith(".pdf");
+      });
+
+      if (files.length === 0) {
+        minutesResult.style.display = "block";
+        minutesResult.className = "alert alert-error";
+        minutesResult.textContent = "Please select a folder containing PDF files.";
+        return;
+      }
+
+      // Encode each file as "<subdir>__<filename>" so the server can reconstruct
+      // the directory structure without needing a server-side path.
+      // webkitRelativePath looks like "rootFolder/subdir/file.pdf".
+      var formData = new FormData();
+      var skipped = 0;
+      files.forEach(function(file) {
+        var parts = (file.webkitRelativePath || file.name).split("/");
+        if (parts.length < 3) { skipped++; return; } // not inside a subdir
+        var subdir = parts[parts.length - 2];
+        var filename = parts[parts.length - 1];
+        formData.append("files", file, subdir + "__" + filename);
+      });
+
+      if (formData.getAll("files").length === 0) {
+        minutesResult.style.display = "block";
+        minutesResult.className = "alert alert-error";
+        minutesResult.textContent = "No files found inside subdirectories. Make sure the selected folder contains subfolders (e.g. management, sailing).";
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Syncing...";
+      minutesResult.style.display = "none";
+
+      fetch("/api/minutes/sync", { method: "POST", body: formData })
+        .then(function(r) {
+          var status = r.status;
+          return r.json().then(function(d) { return { status: status, data: d }; });
+        })
+        .then(function(resp) {
+          minutesResult.style.display = "block";
+          var d = resp.data;
+          if (d.success) {
+            var sectionList = (d.sections || []).map(function(s) {
+              return '<li>' + esc(s.heading) + ': ' + s.count + ' file(s)</li>';
+            }).join('');
+            minutesResult.className = "alert alert-success";
+            minutesResult.innerHTML = esc(d.message) + (sectionList ? '<ul>' + sectionList + '</ul>' : '');
+          } else if (resp.status === 207) {
+            minutesResult.className = "alert alert-warning";
+            minutesResult.textContent = d.message;
+          } else {
+            minutesResult.className = "alert alert-error";
+            minutesResult.textContent = d.message || "Sync failed";
+          }
+        })
+        .catch(function(err) {
+          minutesResult.style.display = "block";
+          minutesResult.className = "alert alert-error";
+          minutesResult.textContent = "Network error: " + err.message;
+        })
+        .finally(function() {
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Sync \u0026 Regenerate";
+        });
+    });
+
+    function esc(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    // ── Photo Consents ──────────────────────────────────────────────────────
+
+    var consentsData = [];
+    var consentsFilter = "all";
+    var consentsScanRunning = false;
+
+    document.getElementById("consents-btn").addEventListener("click", function() {
+      requireScmLogin(function() {
+        hideAllSections();
+        document.getElementById("consents-section").style.display = "block";
+        loadConsents();
+      });
+    });
+
+    function loadConsents() {
+      fetch("/api/consents")
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.status === "not_ready") {
+            document.getElementById("consents-meta").textContent = "No scan results yet.";
+            document.getElementById("consents-content").innerHTML = "<p>Run a scan to load consent data.</p>";
+            document.getElementById("consents-scan-btn").disabled = false;
+            document.getElementById("consents-force-btn").disabled = true;
+            return;
+          }
+          consentsData = data.contacts;
+          var scannedAt = new Date(data.scannedAt);
+          var ageMs = Date.now() - scannedAt.getTime();
+          var ageDays = Math.floor(ageMs / 86400000);
+          var ageHours = Math.floor(ageMs / 3600000);
+          var ageStr = ageDays >= 1 ? ageDays + " day" + (ageDays !== 1 ? "s" : "") + " ago"
+                                    : ageHours + " hour" + (ageHours !== 1 ? "s" : "") + " ago";
+          var freshNote = data.fresh ? " (refresh available in " + (7 - ageDays) + " day" + ((7 - ageDays) !== 1 ? "s" : "") + ")" : "";
+          document.getElementById("consents-meta").textContent =
+            "Last scanned: " + scannedAt.toLocaleString() + " — " + ageStr + freshNote;
+          document.getElementById("consents-scan-btn").disabled = data.fresh;
+          document.getElementById("consents-force-btn").disabled = false;
+          document.getElementById("consents-csv-btn").style.display = "inline-flex";
+          document.getElementById("consents-filters").style.display = "flex";
+          renderConsentsTable();
+        })
+        .catch(function(err) {
+          document.getElementById("consents-content").innerHTML = '<span class="text-error">Error: ' + esc(err.message) + '</span>';
+        });
+    }
+
+    function renderConsentsTable() {
+      var filtered = consentsFilter === "all"
+        ? consentsData
+        : consentsData.filter(function(c) { return c.status === consentsFilter; });
+
+      if (filtered.length === 0) {
+        document.getElementById("consents-content").innerHTML = "<p>No contacts match this filter.</p>";
+        return;
+      }
+
+      var counts = { all: consentsData.length, consented: 0, withdrawn: 0, not_consented: 0, no_record: 0 };
+      consentsData.forEach(function(c) { if (counts[c.status] !== undefined) counts[c.status]++; });
+      document.querySelectorAll(".filter-btn").forEach(function(btn) {
+        var f = btn.getAttribute("data-filter");
+        var count = counts[f] !== undefined ? counts[f] : 0;
+        btn.textContent = f.charAt(0).toUpperCase() + f.slice(1).replace("_", " ") + " (" + (f === "all" ? counts.all : count) + ")";
+      });
+
+      var html = "<table class='data-table'><thead><tr>"
+        + "<th>Name</th><th>Email</th><th>Status</th><th>Withdrawn</th><th></th>"
+        + "</tr></thead><tbody>";
+
+      filtered.forEach(function(c) {
+        var nameCell = '<a href="' + SCM_URL + '/contacts/' + esc(c.contactId) + '" target="_blank" rel="noopener">' + esc(c.name) + '</a>';
+        var badge = '<span class="badge badge-' + esc(c.status) + '">' + esc(c.status.replace("_", " ")) + '</span>';
+        var withdrawnCell = c.withdrawnAt ? new Date(c.withdrawnAt).toLocaleDateString() : "";
+        var canManageConsents = userPermissions.consents === 'full';
+        var actionCell = !canManageConsents ? "" : c.status === "consented"
+          ? '<button class="withdraw-btn" onclick="doWithdraw(this)" data-id="' + esc(c.contactId) + '" data-name="' + esc(c.name) + '">Withdraw</button>'
+          : c.status === "withdrawn"
+          ? '<button class="withdraw-btn" style="background:#38a169;" onclick="doRestoreWithdrawal(this)" data-id="' + esc(c.contactId) + '" data-name="' + esc(c.name) + '">Restore consent</button>'
+          : "";
+        html += "<tr><td>" + nameCell + "</td><td>" + esc(c.email) + "</td><td>"
+          + badge + "</td><td>" + withdrawnCell + "</td><td>" + actionCell + "</td></tr>";
+      });
+
+      html += "</tbody></table>";
+      document.getElementById("consents-content").innerHTML = html;
+    }
+
+    document.querySelectorAll(".filter-btn").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        document.querySelectorAll(".filter-btn").forEach(function(b) { b.classList.remove("active"); });
+        btn.classList.add("active");
+        consentsFilter = btn.getAttribute("data-filter");
+        renderConsentsTable();
+      });
+    });
+
+    function startConsentScan(force) {
+      if (consentsScanRunning) return;
+      if (!force && document.getElementById("consents-scan-btn").disabled) return;
+      consentsScanRunning = true;
+      document.getElementById("consents-scan-btn").disabled = true;
+      document.getElementById("consents-force-btn").disabled = true;
+      document.getElementById("consents-progress").style.display = "block";
+      document.getElementById("consents-progress-bar").style.width = "0";
+      document.getElementById("consents-progress-text").textContent = "Starting scan...";
+
+      fetch("/api/consents/scan", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (!data.success) {
+            document.getElementById("consents-progress-text").textContent = "Error: " + data.message;
+            consentsScanRunning = false;
+            return;
+          }
+          var es = new EventSource("/api/consents/scan/progress");
+          es.onmessage = function(e) {
+            var d = JSON.parse(e.data);
+            if (d.notRunning) {
+              es.close();
+              consentsScanRunning = false;
+              document.getElementById("consents-progress").style.display = "none";
+              loadConsents();
+              return;
+            }
+            if (d.isError) {
+              es.close();
+              consentsScanRunning = false;
+              document.getElementById("consents-progress-text").textContent = "Scan error: " + d.message;
+              return;
+            }
+            if (d.complete) {
+              es.close();
+              consentsScanRunning = false;
+              document.getElementById("consents-progress-bar").style.width = "100%";
+              document.getElementById("consents-progress-text").textContent = "Scan complete — " + d.total + " contacts checked.";
+              setTimeout(function() {
+                document.getElementById("consents-progress").style.display = "none";
+                loadConsents();
+              }, 1500);
+              return;
+            }
+            var pct = d.total > 0 ? Math.round((d.done / d.total) * 100) : 0;
+            document.getElementById("consents-progress-bar").style.width = pct + "%";
+            document.getElementById("consents-progress-text").textContent =
+              d.contact;
+          };
+          es.onerror = function() {
+            es.close();
+            consentsScanRunning = false;
+            document.getElementById("consents-progress-text").textContent = "Connection lost — please try again.";
+          };
+        })
+        .catch(function(err) {
+          consentsScanRunning = false;
+          document.getElementById("consents-progress-text").textContent = "Error: " + err.message;
+        });
+    }
+
+    document.getElementById("consents-scan-btn").addEventListener("click", function() {
+      startConsentScan(false);
+    });
+    document.getElementById("consents-force-btn").addEventListener("click", function() {
+      if (!confirm("Force a full re-scan? This will take several minutes.")) return;
+      startConsentScan(true);
+    });
+
+    document.getElementById("consents-clear-btn").addEventListener("click", function() {
+      var btn = this;
+      btn.disabled = true;
+      fetch("/api/consents/clear-cache", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          btn.disabled = false;
+          consentsData = [];
+          document.getElementById("consents-csv-btn").style.display = "none";
+          document.getElementById("consents-filters").style.display = "none";
+          document.getElementById("consents-meta").textContent = "";
+          document.getElementById("consents-content").innerHTML = "<p>Cache cleared. Run a scan to reload.</p>";
+          document.getElementById("consents-scan-btn").disabled = false;
+          document.getElementById("consents-force-btn").disabled = true;
+        })
+        .catch(function() { btn.disabled = false; });
+    });
+
+    document.getElementById("consents-csv-btn").addEventListener("click", function() {
+      if (!consentsData.length) return;
+      var rows = [["Name", "Email", "Status", "Withdrawn At"]];
+      consentsData.forEach(function(c) {
+        rows.push([c.name, c.email, c.status.replace("_", " "), c.withdrawnAt || ""]);
+      });
+      var csv = rows.map(function(row) {
+        return row.map(function(cell) {
+          return '"' + String(cell).replace(/"/g, '""') + '"';
+        }).join(",");
+      }).join("\n");
+      var blob = new Blob([csv], { type: "text/csv" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "photo-consents.csv";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+
+    function doWithdraw(btn) {
+      var contactId = btn.getAttribute("data-id");
+      var contactName = btn.getAttribute("data-name");
+      if (!confirm("Record that " + contactName + " has withdrawn photo consent?")) return;
+      btn.disabled = true;
+      btn.textContent = "...";
+      fetch("/api/consents/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId: contactId, contactName: contactName })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            var contact = consentsData.find(function(c) { return c.contactId === contactId; });
+            if (contact) {
+              contact.status = "withdrawn";
+              contact.withdrawnAt = data.withdrawnAt;
+            }
+            renderConsentsTable();
+          } else {
+            btn.disabled = false;
+            btn.textContent = "Withdraw";
+          }
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.textContent = "Withdraw";
+        });
+    }
+
+    function doRestoreWithdrawal(btn) {
+      var contactId = btn.getAttribute("data-id");
+      var contactName = btn.getAttribute("data-name");
+      if (!confirm("Restore photo consent for " + contactName + "? This will remove their withdrawal record.")) return;
+      btn.disabled = true;
+      btn.textContent = "...";
+      fetch("/api/consents/undo-withdrawal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId: contactId })
+      })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.success) {
+            var contact = consentsData.find(function(c) { return c.contactId === contactId; });
+            if (contact) {
+              contact.status = "consented";
+              contact.withdrawnAt = undefined;
+            }
+            renderConsentsTable();
+          } else {
+            btn.disabled = false;
+            btn.textContent = "Restore consent";
+          }
+        })
+        .catch(function() {
+          btn.disabled = false;
+          btn.textContent = "Restore consent";
+        });
+    }
+
+    // Scheduler section
+    document.getElementById("scheduler-btn").addEventListener("click", function() {
+      hideAllSections();
+      document.getElementById("scheduler-section").style.display = "block";
+      loadScheduler();
+    });
+
+    function loadScheduler() {
+      var content = document.getElementById("scheduler-content");
+      content.innerHTML = '<span class="text-muted">Loading…</span>';
+      fetch("/api/scheduler/jobs")
+        .then(function(r) { return r.json(); })
+        .then(function(jobs) {
+          if (!jobs.length) {
+            content.innerHTML = '<span class="text-muted">No scheduled jobs.</span>';
+            return;
+          }
+          var rows = jobs.map(function(job) {
+            var statusLabel = job.lastStatus === "running" ? '<span style="color:#007bff;">Running</span>'
+                           : job.lastStatus === "ok"      ? '<span style="color:#28a745;">OK</span>'
+                           : job.lastStatus === "failed"  ? '<span style="color:#dc3545;">Failed</span>'
+                           : '<span style="color:#6c757d;">—</span>';
+            var lastRun = job.lastRun ? new Date(job.lastRun).toLocaleString() : '—';
+            var nextRun = new Date(job.nextRun).toLocaleString();
+            return '<tr data-job="' + job.name + '">'
+              + '<td style="padding:6px 8px;">' + job.name + '</td>'
+              + '<td style="padding:6px 8px;font-family:monospace;">' + job.cronExpression + '</td>'
+              + '<td style="padding:6px 8px;">' + nextRun + '</td>'
+              + '<td style="padding:6px 8px;">' + lastRun + '</td>'
+              + '<td style="padding:6px 8px;">' + statusLabel + '</td>'
+              + '<td style="padding:6px 8px;"><button class="nav-link run-now-btn" style="margin:0;padding:4px 10px;font-size:0.85rem;" data-job="' + job.name + '">Run Now</button></td>'
+              + '</tr>';
+          }).join('');
+          content.innerHTML = '<table style="border-collapse:collapse;width:100%;">'
+            + '<thead><tr>'
+            + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #dee2e6;">Job</th>'
+            + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #dee2e6;">Schedule</th>'
+            + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #dee2e6;">Next Run</th>'
+            + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #dee2e6;">Last Run</th>'
+            + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #dee2e6;">Status</th>'
+            + '<th style="text-align:left;padding:6px 8px;border-bottom:1px solid #dee2e6;">Action</th>'
+            + '</tr></thead><tbody>' + rows + '</tbody></table>';
+          content.querySelectorAll(".run-now-btn").forEach(function(btn) {
+            btn.addEventListener("click", function() {
+              var name = btn.getAttribute("data-job");
+              btn.disabled = true;
+              btn.textContent = "Running…";
+              fetch("/api/scheduler/jobs/" + name + "/run", { method: "POST" })
+                .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+                .then(function(res) {
+                  btn.textContent = res.ok ? "Done" : (res.d.message || "Failed");
+                  setTimeout(function() { loadScheduler(); }, 1500);
+                })
+                .catch(function() {
+                  btn.textContent = "Error";
+                  setTimeout(function() { loadScheduler(); }, 1500);
+                });
+            });
+          });
+        })
+        .catch(function() {
+          content.innerHTML = '<span class="text-error">Failed to load scheduler jobs.</span>';
+        });
+    }
+
+  </script>
+  <!-- ── UI tidy-up overrides (Direction B) ─────────────────────────────── -->
+  <style>
+    /* Header — lighter, on white */
+    #app-header {
+      background: var(--card) !important;
+      color: var(--text) !important;
+      height: 56px !important;
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow) !important;
+      gap: 0.85rem !important;
+    }
+    #app-header .brand { color: var(--navy-900); display:inline-flex; align-items:center; gap:0.55rem; font-weight:700; font-size:0.95rem; }
+    #app-header .brand::before {
+      content: "S";
+      width: 26px; height: 26px;
+      background: var(--navy-600); color: #fff;
+      border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700;
+    }
+    #app-header .header-email {
+      color: var(--muted) !important;
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-size: 0.78rem !important;
+    }
+    .hdr-btn {
+      background: var(--card) !important;
+      color: var(--text-2) !important;
+      border: 1px solid var(--border) !important;
+    }
+    .hdr-btn:hover { background: var(--surface-2,#f9fafc) !important; color: var(--text) !important; }
+    /* SCM connect → status pill */
+    #scm-login-btn {
+      border-radius: 999px !important;
+      padding: 4px 11px 4px 9px !important;
+      gap: 7px;
+      font-weight: 500;
+    }
+    #scm-login-btn::before {
+      content: ""; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--mute-2,#93a0b3); flex-shrink: 0; margin-right: 4px;
+    }
+    #scm-login-btn.scm-connected {
+      background: var(--ok-bg,#e3f3eb) !important;
+      color: var(--success) !important;
+      border-color: rgba(31,138,91,0.18) !important;
+    }
+    #scm-login-btn.scm-connected::before {
+      background: var(--success);
+      animation: scm-pulse 2.4s infinite;
+    }
+    @keyframes scm-pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(31,138,91,0.45); }
+      70%  { box-shadow: 0 0 0 6px rgba(31,138,91,0); }
+      100% { box-shadow: 0 0 0 0 rgba(31,138,91,0); }
+    }
+    #scm-login-btn.scm-connecting {
+      background: var(--warn-bg,#fbeede) !important;
+      color: var(--warning) !important;
+      border-color: rgba(180,90,20,0.22) !important;
+    }
+    #scm-login-btn.scm-connecting::before {
+      background: var(--warning);
+      animation: scm-connecting-pulse 0.9s ease-in-out infinite;
+    }
+    @keyframes scm-connecting-pulse {
+      0%,100% { opacity: 1; transform: scale(1); }
+      50%      { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    /* Page wrapper */
+    .page { max-width: 1280px !important; padding: 1.25rem 1.5rem 3rem !important; }
+    #status {
+      font-size: 0.78rem; color: var(--muted);
+      padding: 0.4rem 0; background: transparent !important;
+      border: none !important; border-radius: 0 !important;
+      margin-bottom: 0.75rem !important;
+      font-family: 'DM Mono', ui-monospace, monospace;
+    }
+    #status:empty { display: none; }
+
+    /* Hide the old wrapping tab-nav + per-id button trigger row */
+    .tab-nav { display: none !important; }
+
+    /* New top nav (single-row, grouped) */
+    .nav-bar {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 1.5rem;
+      height: 48px;
+      display: flex; align-items: stretch; gap: 2px;
+      position: sticky; top: 56px; z-index: 90;
+      margin: -1.25rem -1.5rem 1.25rem;
+    }
+    .nav-tab {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 0 14px;
+      border: none; background: transparent;
+      color: var(--text-2);
+      font: inherit; font-size: 0.88rem; font-weight: 500;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      cursor: pointer;
+      transition: color var(--t-fast), border-color var(--t-fast), background var(--t-fast);
+      white-space: nowrap;
+    }
+    .nav-tab:hover { color: var(--navy-700); background: var(--navy-50); }
+    .nav-tab.active {
+      color: var(--navy-800);
+      border-bottom-color: var(--navy-600);
+      font-weight: 600;
+    }
+    .nav-tab .caret { width: 10px; height: 10px; opacity: 0.6; transition: transform var(--t-fast); }
+    .nav-tab[aria-expanded="true"] .caret { transform: rotate(180deg); }
+    .nav-tab .nav-badge {
+      background: var(--warn-bg);
+      color: var(--warning);
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-size: 11px; font-weight: 500;
+      padding: 1px 7px; border-radius: 999px;
+      min-width: 20px; text-align: center;
+    }
+
+    /* Dropdown */
+    .dd-overlay { position: fixed; inset: 0; z-index: 110; background: transparent; }
+    .dd {
+      position: fixed;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md,10px);
+      box-shadow: var(--shadow-lg);
+      padding: 8px;
+      min-width: 480px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      z-index: 120;
+      animation: dd-in 140ms cubic-bezier(0.2, 0.7, 0.3, 1);
+    }
+    @keyframes dd-in {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .dd-item {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px 10px;
+      padding: 9px 11px;
+      border-radius: var(--r-sm,6px);
+      cursor: pointer;
+      transition: background var(--t-fast);
+      border: none; background: transparent;
+      text-align: left; font-family: inherit;
+    }
+    .dd-item:hover { background: var(--navy-50); }
+    .dd-item .dd-name { font-size: 0.88rem; font-weight: 600; color: var(--navy-900); }
+    .dd-item .dd-desc { grid-column: 1 / -1; font-size: 0.78rem; color: var(--muted); line-height: 1.4; }
+    .dd-item .dd-badge {
+      align-self: start;
+      background: var(--warn-bg); color: var(--warning);
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-size: 11px; font-weight: 500;
+      padding: 1px 7px; border-radius: 999px;
+      min-width: 22px; text-align: center;
+    }
+
+    /* Crumb shown above each section heading */
+    .crumb {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.8rem; color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .crumb b { color: var(--text); font-weight: 600; }
+    .crumb .sep { color: var(--mute-2); }
+
+    /* Section heading — softer divider */
+    .section-heading {
+      font-size: 1.05rem; font-weight: 600;
+      color: var(--navy-900);
+      margin-bottom: 1rem; padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--line-soft) !important;
+    }
+
+    /* Card */
+    .card {
+      border: 1px solid var(--border) !important;
+      border-radius: var(--r-md,10px) !important;
+      box-shadow: var(--shadow) !important;
+    }
+
+    /* Buttons — softer */
+    .btn { border-radius: var(--r-sm,6px) !important; font-size: 0.85rem !important; }
+    .btn-ghost {
+      background: var(--card) !important;
+      color: var(--text-2) !important;
+      border: 1px solid var(--border) !important;
+    }
+    .btn-ghost:hover { background: var(--surface-2,#f9fafc) !important; color: var(--text) !important; }
+
+    /* Tables — modernized */
+    .data-table th {
+      background: var(--surface-2,#f9fafc) !important;
+      font-size: 0.72rem !important;
+      font-weight: 600 !important;
+      color: var(--muted) !important;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border) !important;
+    }
+    .data-table td {
+      border-bottom: 1px solid var(--line-soft) !important;
+    }
+    .data-table tbody tr:hover { background: var(--navy-50) !important; }
+
+    /* Home view */
+    #home-section .home-head {
+      display: flex; align-items: flex-end; gap: 12px;
+      margin-bottom: 1.25rem;
+    }
+    #home-section .home-head h1 {
+      font-size: 1.5rem; font-weight: 700; letter-spacing: -0.015em;
+      color: var(--navy-900); margin: 0;
+    }
+    #home-section .home-head .sub {
+      font-size: 0.85rem; color: var(--muted); margin-top: 2px;
+    }
+    #home-section .home-section-head {
+      display: flex; align-items: baseline; gap: 12px;
+      margin: 0 0 0.75rem;
+      font-size: 0.78rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--muted);
+    }
+    #home-section .home-section-head .meta {
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-size: 0.72rem; color: var(--mute-2);
+      text-transform: none; letter-spacing: 0;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 880px) { .stat-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 540px) { .stat-grid { grid-template-columns: 1fr; } }
+    .stat-tile {
+      display: block; text-align: left; width: 100%;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md,10px);
+      padding: 16px 18px 14px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: transform var(--t-base), box-shadow var(--t-base), border-color var(--t-base);
+    }
+    .stat-tile:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+      border-color: var(--navy-200);
+    }
+    .stat-tile .stat-top {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .stat-tile .stat-label {
+      font-size: 0.74rem; font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .stat-tile .stat-num {
+      font-size: 1.9rem; font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--navy-900);
+      line-height: 1.1; margin-bottom: 2px;
+    }
+    .stat-tile .stat-num.warn { color: var(--warning); }
+    .stat-tile .stat-num.ok   { color: var(--success); }
+    .stat-tile .stat-desc { font-size: 0.82rem; color: var(--text-2); margin-bottom: 10px; }
+    .stat-tile .stat-foot {
+      font-family: 'DM Mono', ui-monospace, monospace;
+      font-size: 0.68rem; color: var(--mute-2);
+    }
+
+    /* Smaller-screen nav: allow horizontal scroll, hide email */
+    @media (max-width: 720px) {
+      .nav-bar { overflow-x: auto; padding: 0 1rem; }
+      #app-header .header-email { display: none; }
+    }
+  </style>
+
+  <!-- New nav-bar + home — injected by script after DOM ready so JS handler IDs stay intact -->
+  <script>
+    (function() {
+      // Wait until dashboard is in the DOM (it always is at script-run time).
+      const NAV = [
+        { id: 'home',     label: 'Home',            type: 'leaf' },
+        { id: 'contacts', label: 'Contacts',        type: 'group',
+          tools: [
+            { btn: 'duplicates-btn',  label: 'Duplicates',       desc: 'Merge contacts that look like the same person.' },
+            { btn: 'name-repair-btn', label: 'Name Repair',      desc: 'Fix capitalisation and stray whitespace in names.' },
+            { btn: 'email-issues-btn',label: 'Email Issues',     desc: 'Bounces, malformed addresses, missing emails.' },
+            { btn: 'fix-email-issues-btn', label: 'Fix Email Issues', desc: 'Apply suggested fixes for the issues above.' },
+          ] },
+        { id: 'tasks',    label: 'Tasks & Status',  type: 'group',
+          tools: [
+            { btn: 'tasks-btn',     label: 'SCM Tasks', desc: 'Bookings, memberships and courses needing action.' },
+            { btn: 'scheduler-btn', label: 'Scheduler', desc: 'Background jobs — recent runs and upcoming.' },
+          ] },
+        { id: 'content',  label: 'Content',         type: 'group',
+          tools: [
+            { btn: 'minutes-btn',  label: 'Minutes',        desc: 'Sync committee minutes from a folder.' },
+            { btn: 'consents-btn', label: 'Photo Consents', desc: 'Review which members have given photo consent.' },
+          ] },
+        { id: 'admin',    label: 'Admin',           type: 'group',
+          tools: [
+            { btn: 'users-btn',       label: 'Users',       desc: 'Manage who can sign in and what they can do.' },
+            { btn: 'clear-cache-btn', label: 'Clear Cache', desc: 'Force a fresh fetch from SCM next request.' },
+          ] },
+        { id: 'help',     label: 'Help',            type: 'leaf' },
+      ];
+
+      // Map button id → group id (for crumb + active-tab tracking)
+      const GROUP_OF_BTN = {};
+      NAV.forEach(n => { if (n.type === 'group') n.tools.forEach(t => GROUP_OF_BTN[t.btn] = n.id); });
+
+      function ready(fn){ if (document.readyState !== 'loading') fn(); else document.addEventListener('DOMContentLoaded', fn); }
+
+      ready(function() {
+        const dashboard = document.getElementById('dashboard-section');
+        if (!dashboard) return;
+        const page = dashboard.querySelector('.page');
+        if (!page) return;
+
+        // Build nav-bar
+        const navBar = document.createElement('nav');
+        navBar.className = 'nav-bar';
+        navBar.setAttribute('role','navigation');
+        navBar.setAttribute('aria-label','Primary');
+        navBar.innerHTML = NAV.map(n => {
+          if (n.type === 'leaf') {
+            return '<button class="nav-tab" data-nav="'+n.id+'">'+n.label+'</button>';
+          }
+          return '<button class="nav-tab" data-nav="'+n.id+'" aria-haspopup="menu" aria-expanded="false">'
+            + n.label
+            + ' <span class="nav-badge" style="display:none"></span>'
+            + ' <svg class="caret" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5 L6 7.5 L9 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+            + '</button>';
+        }).join('');
+
+        // Insert nav-bar at top of .page (before #status)
+        page.insertBefore(navBar, page.firstChild);
+
+        // Build Home section
+        const home = document.createElement('div');
+        home.id = 'home-section';
+        home.style.display = 'none';
+        home.innerHTML =
+          '<div class="crumb"><b>Home</b></div>' +
+          '<div class="home-head"><div>' +
+            '<h1>Today</h1><div class="sub">Click any tile to jump to that tool.</div>' +
+          '</div></div>' +
+          '<div class="home-section-head"><span>What needs attention</span><span class="meta" id="home-sync-meta"></span></div>' +
+          '<div class="stat-grid" id="home-tiles"></div>';
+
+        // Insert home section right after the legacy tab-nav (which we hide)
+        const tabNav = page.querySelector('.tab-nav');
+        if (tabNav && tabNav.nextSibling) page.insertBefore(home, tabNav.nextSibling);
+        else page.appendChild(home);
+
+        // Add crumbs into each existing section so they get group context
+        const SECTION_BTN_MAP = {
+          'tasks-section':       'tasks-btn',
+          'duplicates-section':  'duplicates-btn',
+          'name-repair-section': 'name-repair-btn',
+          'email-issues-section':'email-issues-btn',
+          'minutes-section':     'minutes-btn',
+          'consents-section':    'consents-btn',
+          'users-section':       'users-btn',
+          'scheduler-section':   'scheduler-btn',
+        };
+        const GROUP_LABEL = { contacts:'Contacts', tasks:'Tasks & Status', content:'Content', admin:'Admin' };
+        Object.keys(SECTION_BTN_MAP).forEach(sid => {
+          const sec = document.getElementById(sid);
+          if (!sec) return;
+          const btnId = SECTION_BTN_MAP[sid];
+          const grp = GROUP_OF_BTN[btnId];
+          const grpLabel = GROUP_LABEL[grp] || '';
+          // grab heading text from existing card
+          const heading = sec.querySelector('.section-heading');
+          const headText = heading ? heading.textContent : '';
+          const crumb = document.createElement('div');
+          crumb.className = 'crumb';
+          crumb.innerHTML = grpLabel
+            ? '<span>' + grpLabel + '</span><span class="sep">›</span><b>' + headText + '</b>'
+            : '<b>' + headText + '</b>';
+          sec.insertBefore(crumb, sec.firstChild);
+        });
+
+        // ── Dropdown handling ──────────────────────────────────────────────
+        let openOverlay = null, openDd = null, openTabBtn = null;
+        function closeDropdown() {
+          if (openOverlay) { openOverlay.remove(); openOverlay = null; }
+          if (openDd) { openDd.remove(); openDd = null; }
+          if (openTabBtn) { openTabBtn.setAttribute('aria-expanded','false'); openTabBtn = null; }
+        }
+        function openDropdown(group, tabBtn) {
+          closeDropdown();
+          const r = tabBtn.getBoundingClientRect();
+          const overlay = document.createElement('div'); overlay.className = 'dd-overlay';
+          overlay.addEventListener('click', closeDropdown);
+          const dd = document.createElement('div'); dd.className = 'dd';
+          dd.style.left = r.left + 'px';
+          dd.style.top  = (r.bottom + 4) + 'px';
+          dd.innerHTML = group.tools.map(t =>
+            '<button class="dd-item" data-btn="'+t.btn+'">'
+              + '<span class="dd-name">' + t.label + '</span>'
+              + '<span class="dd-badge" style="display:none"></span>'
+              + '<span class="dd-desc">' + t.desc + '</span>'
+            + '</button>'
+          ).join('');
+          dd.addEventListener('click', e => e.stopPropagation());
+          dd.querySelectorAll('.dd-item').forEach(item => {
+            item.addEventListener('click', () => {
+              const btnId = item.dataset.btn;
+              closeDropdown();
+              setActive(btnId);
+              const realBtn = document.getElementById(btnId);
+              if (realBtn) realBtn.click();
+            });
+          });
+          document.body.appendChild(overlay);
+          document.body.appendChild(dd);
+          openOverlay = overlay; openDd = dd; openTabBtn = tabBtn;
+          tabBtn.setAttribute('aria-expanded','true');
+          // copy badges from nav-tab into dropdown items where present
+          group.tools.forEach(t => {
+            const realBtn = document.getElementById(t.btn);
+            if (realBtn && realBtn.style.display === 'none') {
+              const item = dd.querySelector('[data-btn="'+t.btn+'"]');
+              if (item) item.style.display = 'none';
+            }
+          });
+        }
+
+        // Active-tab tracking
+        function setActiveGroup(groupId) {
+          navBar.querySelectorAll('.nav-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.nav === groupId);
+          });
+        }
+        function setActive(btnId) {
+          if (btnId === 'home') { setActiveGroup('home'); return; }
+          const grp = GROUP_OF_BTN[btnId];
+          setActiveGroup(grp);
+        }
+
+        // Wire nav-tab clicks
+        navBar.querySelectorAll('.nav-tab').forEach(tab => {
+          const navId = tab.dataset.nav;
+          tab.addEventListener('click', e => {
+            e.stopPropagation();
+            if (navId === 'home') {
+              closeDropdown();
+              showHome();
+              setActiveGroup('home');
+              return;
+            }
+            if (navId === 'help') {
+              closeDropdown();
+              hideAllSections();
+              const homeEl = document.getElementById('home-section');
+              if (homeEl) homeEl.style.display = 'none';
+              document.getElementById('help-section').style.display = 'block';
+              setActiveGroup('help');
+              return;
+            }
+            const group = NAV.find(n => n.id === navId);
+            if (!group || group.type !== 'group') return;
+            if (openTabBtn === tab) closeDropdown();
+            else openDropdown(group, tab);
+          });
+        });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDropdown(); });
+        window.addEventListener('resize', closeDropdown);
+
+        // Hijack legacy button clicks to keep active group in sync, even
+        // when triggered programmatically from elsewhere.
+        Object.keys(GROUP_OF_BTN).forEach(btnId => {
+          const realBtn = document.getElementById(btnId);
+          if (!realBtn) return;
+          realBtn.addEventListener('click', () => {
+            // Hide home view when any tool is clicked
+            const home = document.getElementById('home-section');
+            if (home) home.style.display = 'none';
+            setActive(btnId);
+          }, true);
+        });
+
+        // ── Home view ──────────────────────────────────────────────────────
+        const HOME_TILES = [
+          { btn: 'tasks-btn',        apiKey: 'tasks',           label: 'SCM Tasks',          desc: 'Items needing your attention' },
+          { btn: 'duplicates-btn',   apiKey: 'duplicates',      label: 'Duplicate contacts', desc: 'Groups awaiting merge or review' },
+          { btn: 'email-issues-btn', apiKey: 'emailIssues',     label: 'Email issues',       desc: 'Bounces, malformed, missing addresses' },
+          { btn: 'name-repair-btn',  apiKey: 'nameIssues',      label: 'Names to repair',    desc: 'Capitalisation and whitespace fixes' },
+          { btn: 'consents-btn',     apiKey: 'consentsGranted', label: 'Photo consents',     desc: 'Contacts with current photo consent', invert: true },
+          { btn: 'scheduler-btn',    apiKey: 'schedulerFailed', label: 'Scheduled jobs',     desc: 'Background jobs running on time' },
+        ];
+
+        function showHome() {
+          ['tasks-section','duplicates-section','name-repair-section','email-issues-section','minutes-section','consents-section','users-section','scheduler-section','help-section'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'none';
+          });
+          renderHomeTiles(null);
+          home.style.display = 'block';
+          fetch('/api/dashboard/summary')
+            .then(function(r) { return r.json(); })
+            .then(function(summary) { renderHomeTiles(summary); })
+            .catch(function() {});
+        }
+        function renderHomeTiles(summary) {
+          const grid = document.getElementById('home-tiles');
+          if (!grid) return;
+          const visible = HOME_TILES.filter(function(t) {
+            const b = document.getElementById(t.btn);
+            return b && b.style.display !== 'none';
+          });
+          grid.innerHTML = visible.map(function(t) {
+            var raw = summary ? summary[t.apiKey] : null;
+            var num = (raw !== null && raw !== undefined) ? raw : null;
+            var tone = num === null ? '' : (t.invert ? (num === 0 ? 'warn' : 'ok') : (num === 0 ? 'ok' : 'warn'));
+            var display = num === null
+              ? '<span style="color:var(--mute-2);font-size:1.6rem;line-height:1;">&#8212;</span>'
+              : num;
+            return '<button class="stat-tile" data-btn="'+t.btn+'">'
+              + '<div class="stat-top"><span class="stat-label">'+t.label+'</span></div>'
+              + '<div class="stat-num '+tone+'">'+display+'</div>'
+              + '<div class="stat-desc">'+t.desc+'</div>'
+            + '</button>';
+          }).join('');
+          grid.querySelectorAll('.stat-tile').forEach(function(tile) {
+            tile.addEventListener('click', function() {
+              var realBtn = document.getElementById(tile.dataset.btn);
+              if (realBtn) realBtn.click();
+            });
+          });
+        }
+
+        // Show home as the default landing view when dashboard becomes visible.
+        // Use a MutationObserver since showDashboard() flips display via JS.
+        const dashEl = document.getElementById('dashboard-section');
+        const tryShowHome = () => {
+          if (dashEl.style.display === 'block' || dashEl.style.display === '') {
+            // Only auto-show home if no other section is open
+            const anyOpen = ['tasks-section','duplicates-section','name-repair-section','email-issues-section','minutes-section','consents-section','users-section','scheduler-section','help-section']
+              .some(id => { const el = document.getElementById(id); return el && el.style.display === 'block'; });
+            if (!anyOpen && home.style.display !== 'block') {
+              showHome();
+            }
+          }
+        };
+        const mo = new MutationObserver(tryShowHome);
+        mo.observe(dashEl, { attributes: true, attributeFilter: ['style'] });
+        // Initial
+        tryShowHome();
+      });
+    })();
+  </script>
+</body>
+</html>
