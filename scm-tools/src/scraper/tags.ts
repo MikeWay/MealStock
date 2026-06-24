@@ -17,14 +17,18 @@ export async function addTagToContact(page: Page, contactId: string, tag: string
   await tagInput.waitFor({ state: "visible", timeout: 5_000 });
   await tagInput.fill(tag);
 
-  // Wait for autocomplete and pick the exact match if available
+  // Wait for autocomplete, then pick exact match if available, otherwise dismiss
   await page.waitForTimeout(700);
   const autocompleteItems = page.locator('.ui-autocomplete li.ui-menu-item');
   if (await autocompleteItems.count() > 0) {
     const match = autocompleteItems.filter({ hasText: new RegExp(`^${tag}$`, "i") }).first();
-    const target = (await match.count() > 0) ? match : autocompleteItems.first();
-    await target.click();
-    await page.waitForTimeout(300);
+    if (await match.count() > 0) {
+      await match.click();
+      await page.waitForTimeout(300);
+    } else {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(200);
+    }
   }
 
   // Click the Add button scoped to the edit_tags form

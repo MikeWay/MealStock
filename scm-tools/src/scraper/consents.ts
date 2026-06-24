@@ -268,17 +268,19 @@ async function waitForCsvCount(
   page: Page,
   expectedCount: number,
   onPoll: (ready: number, expected: number) => void,
+  isCancelled: () => boolean = () => false,
   maxWaitMs = 10 * 60_000,
   pollIntervalMs = 5_000
 ): Promise<string[]> {
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
+    if (isCancelled()) throw new Error("__cancelled__");
     const csvTexts = await getTodaysCsvTexts(page);
     console.log(`waitForCsvCount: ${csvTexts.length}/${expectedCount}`);
     onPoll(csvTexts.length, expectedCount);
     if (csvTexts.length >= expectedCount) return csvTexts;
     await page.waitForTimeout(pollIntervalMs);
+    if (isCancelled()) throw new Error("__cancelled__");
   }
   throw new Error("Timed out waiting for bookable exports to be ready");
 }
@@ -411,7 +413,8 @@ function parseRow(line: string): string[] {
  */
 export async function fetchAllConsents(
   page: Page,
-  onProgress: (done: number, total: number, name: string) => void
+  onProgress: (done: number, total: number, name: string) => void,
+  isCancelled: () => boolean = () => false
 ): Promise<Map<string, ConsentStatus>> {
   // Always clear our own old jobs first
   await clearActiveJobs(page);
@@ -428,7 +431,8 @@ export async function fetchAllConsents(
     csvTexts = await waitForCsvCount(
       page,
       1,
-      (ready, expected) => onProgress(ready, expected, `Waiting for export… (${ready} of ${expected} ready)`)
+      (ready, expected) => onProgress(ready, expected, `Waiting for export… (${ready} of ${expected} ready)`),
+      isCancelled
     );
   }
 

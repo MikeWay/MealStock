@@ -154,6 +154,15 @@
       border-radius: 8px;
       margin-bottom: 1.25rem;
     }
+    #contacts-cache-banner {
+      font-size: 0.85rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    #contacts-cache-banner.banner-warn { background: var(--warn-bg); color: var(--warning-dark); }
+    #contacts-cache-banner.banner-info { background: var(--navy-100); color: var(--navy-700); }
+    #contacts-cache-banner.banner-ok   { background: var(--ok-bg); color: var(--success-dark); }
 
     /* ── Tab navigation ─────────────────────────────────────────────────── */
     .tab-nav {
@@ -196,6 +205,7 @@
     .tab-btn.tab-consents     { --tc: var(--teal); }
     .tab-btn.tab-users        { --tc: var(--neutral); }
     .tab-btn.tab-name-repair  { --tc: var(--warning); }
+    .tab-btn.tab-applications { --tc: var(--neutral); }
 
     .tab-btn.active {
       background: var(--tc, var(--accent));
@@ -223,6 +233,19 @@
       padding-bottom: 0.6rem;
       border-bottom: 2px solid var(--border);
     }
+    .card-collapsible .section-heading {
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      margin-bottom: 0;
+    }
+    .card-collapsible .card-body { margin-top: 1.25rem; }
+    .card-collapsible.collapsed .section-heading { padding-bottom: 0; border-bottom: none; }
+    .card-collapsible.collapsed .card-body { display: none; }
+    .card-chevron { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.45; transition: transform 0.18s; }
+    .card-collapsible.collapsed .card-chevron { transform: rotate(-90deg); }
 
     /* ── Generic button ─────────────────────────────────────────────────── */
     .btn {
@@ -687,6 +710,7 @@
 
       <!-- Status bar -->
       <div id="status">Loading…</div>
+      <div id="contacts-cache-banner" style="display:none;"></div>
 
       <!-- Tab navigation -->
       <nav class="tab-nav" role="navigation" aria-label="Dashboard sections">
@@ -720,6 +744,9 @@
         <button class="tab-btn tab-scheduler"   id="scheduler-btn">
           <span class="tab-dot"></span>Scheduler
         </button>
+        <button class="tab-btn tab-applications" id="applications-btn">
+          <span class="tab-dot"></span>Applications
+        </button>
       </nav>
 
       <!-- Tasks section -->
@@ -734,6 +761,56 @@
 
       <!-- Duplicates section -->
       <div id="duplicates-section" style="display:none;">
+
+        <!-- Auto-Merge Rules card -->
+        <div class="card card-collapsible collapsed" id="auto-merge-rules-card" style="margin-bottom:1rem;">
+          <h2 class="section-heading">Auto-Merge Rules<svg class="card-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5 L6 7.5 L9 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg></h2>
+          <div class="card-body">
+            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:0.75rem;">Define rules that automatically merge duplicate contacts when all conditions match. Rules are evaluated in order; the first matching rule wins.</p>
+            <div id="auto-merge-rules-list"></div>
+            <button class="merge-btn" id="auto-merge-rules-add-btn" style="display:none;margin-top:0.5rem;">Add Rule</button>
+
+            <div id="auto-merge-rule-editor" style="display:none;margin-top:1rem;padding:1rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;">
+              <h3 id="auto-merge-editor-heading" style="font-size:0.9rem;margin:0 0 0.75rem;font-weight:600;">Add Rule</h3>
+              <div style="margin-bottom:0.5rem;">
+                <label style="font-size:0.88rem;display:block;margin-bottom:0.25rem;">Rule name</label>
+                <input type="text" id="auto-merge-rule-name" placeholder="e.g. Same email" style="width:100%;max-width:320px;box-sizing:border-box;">
+              </div>
+              <div style="margin-bottom:0.5rem;">
+                <label style="font-size:0.88rem;display:block;margin-bottom:0.25rem;">Primary contact selection</label>
+                <select id="auto-merge-rule-primary" style="max-width:320px;">
+                  <option value="suggested">System suggestion (default)</option>
+                  <option value="active_first">Active membership first</option>
+                  <option value="older_first">Older record first</option>
+                </select>
+              </div>
+              <div style="margin-bottom:0.5rem;">
+                <label style="font-size:0.88rem;display:block;margin-bottom:0.5rem;">Conditions <span style="color:var(--muted);font-weight:400;">(all must match)</span></label>
+                <div id="auto-merge-conditions-list"></div>
+                <a href="#" id="auto-merge-add-condition" style="font-size:0.85rem;color:var(--accent);display:inline-block;margin-top:0.25rem;">+ Add condition</a>
+              </div>
+              <div style="margin-top:0.75rem;">
+                <button class="merge-btn" id="auto-merge-editor-save">Save Rule</button>
+                <button id="auto-merge-editor-cancel" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:0.88rem;margin-left:0.5rem;">Cancel</button>
+                <span id="auto-merge-editor-msg" style="font-size:0.88rem;margin-left:0.5rem;color:var(--danger);"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Run Auto-Merge card -->
+        <div class="card card-collapsible collapsed" id="auto-merge-run-card" style="margin-bottom:1rem;">
+          <h2 class="section-heading">Run Auto-Merge<svg class="card-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5 L6 7.5 L9 4.5" stroke-linecap="round" stroke-linejoin="round"/></svg></h2>
+          <div class="card-body">
+            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:0.75rem;">Run all enabled rules against current duplicate contacts and automatically merge matching pairs.</p>
+            <div class="btn-row" style="margin-bottom:0.75rem;">
+              <button class="merge-btn" id="auto-merge-preview-btn" style="display:none;background:var(--neutral);">Preview</button>
+              <button class="merge-btn" id="auto-merge-run-btn" style="display:none;background:var(--purple);">Run Auto-Merge</button>
+            </div>
+            <div id="auto-merge-progress" style="margin-top:0;"></div>
+          </div>
+        </div>
+
         <div class="card">
           <h2 class="section-heading">Duplicate Contacts</h2>
           <div id="duplicates-content"></div>
@@ -786,11 +863,15 @@
         <div class="card">
           <h2 class="section-heading">Photo Consents</h2>
           <div id="consents-meta"></div>
-          <div class="btn-row">
+          <div id="consents-action-row" class="btn-row">
             <button class="btn btn-teal"    id="consents-scan-btn">Scan Consents</button>
             <button class="btn btn-ghost"   id="consents-force-btn">Force Refresh</button>
             <button class="btn btn-danger"  id="consents-clear-btn">Clear Cache</button>
             <button class="btn btn-success" id="consents-csv-btn" style="display:none;">Download CSV</button>
+          </div>
+          <div id="consents-scan-active" style="display:none;">
+            <p style="margin-bottom:0.5rem;color:var(--text-2);font-size:0.9rem;">Scan in progress&hellip;</p>
+            <button class="btn btn-danger" id="consents-cancel-btn">Cancel Scan</button>
           </div>
           <div id="consents-progress" style="display:none;">
             <div id="consents-progress-bar-wrap"><div id="consents-progress-bar"></div></div>
@@ -937,6 +1018,18 @@
         </div>
       </div>
 
+      <!-- Applications section -->
+      <div id="applications-section" style="display:none;">
+        <div class="card">
+          <h2 class="section-heading">Membership Applications</h2>
+          <p style="color:var(--text-2);font-size:0.92rem;margin-bottom:1rem;">Download all membership applications as a CSV file.</p>
+          <button class="tab-btn tab-applications" id="download-applications-btn" style="margin:0;">
+            <span class="tab-dot"></span>Download CSV
+          </button>
+          <div id="applications-msg" style="margin-top:0.75rem;font-size:0.9rem;"></div>
+        </div>
+      </div>
+
       <!-- Help section -->
       <div id="help-section" style="display:none;">
         <div class="card" style="max-width:760px;">
@@ -1004,7 +1097,7 @@
       document.getElementById("password-input").value = "";
     }
 
-    var ALL_SECTIONS = ["tasks-section","duplicates-section","name-repair-section","email-issues-section","minutes-section","consents-section","users-section","scheduler-section","help-section"];
+    var ALL_SECTIONS = ["tasks-section","duplicates-section","name-repair-section","email-issues-section","minutes-section","consents-section","users-section","scheduler-section","applications-section","help-section"];
     function hideAllSections() {
       ALL_SECTIONS.forEach(function(id) {
         document.getElementById(id).style.display = "none";
@@ -1188,7 +1281,10 @@
       vis('tasks-btn',           p.tasks !== 'none' && !!p.tasks);
       vis('duplicates-btn',      p.duplicates !== 'none' && !!p.duplicates);
       vis('name-repair-btn',     p.duplicates !== 'none' && !!p.duplicates);
-      vis('clear-cache-btn',     p.duplicates === 'full');
+      vis('clear-cache-btn',          p.duplicates === 'full');
+      vis('auto-merge-rules-add-btn',  p.duplicates === 'full');
+      vis('auto-merge-preview-btn',    p.duplicates === 'full');
+      vis('auto-merge-run-btn',        p.duplicates === 'full');
       vis('email-issues-btn',    p.emailIssues !== 'none' && !!p.emailIssues);
       vis('fix-email-issues-btn',p.emailIssues === 'full');
       vis('minutes-btn',         p.minutes !== 'none' && !!p.minutes);
@@ -1199,6 +1295,7 @@
       vis('users-btn',           p.users !== 'none' && !!p.users);
       vis('roles-card',          p.users === 'full');
       vis('scheduler-btn',       p.users !== 'none' && !!p.users);
+      vis('applications-btn',    p.users === 'full');
     }
 
     // SCM login state
@@ -1755,6 +1852,86 @@
         });
     });
 
+    // ── Contacts cache auto-refresh ───────────────────────────────────────
+    var _cacheRefreshEs = null;
+
+    function showCacheBanner(msg, type) {
+      var b = document.getElementById("contacts-cache-banner");
+      b.textContent = msg;
+      b.className = "banner-" + (type || "info");
+      b.style.display = "block";
+    }
+
+    function hideCacheBanner() {
+      document.getElementById("contacts-cache-banner").style.display = "none";
+    }
+
+    function refreshCurrentContactsSection() {
+      if (nameRepairSection && nameRepairSection.style.display !== "none" &&
+          nameRepairRunBtn && !nameRepairRunBtn.disabled) {
+        nameRepairRunBtn.click();
+      }
+    }
+
+    function watchCacheRefresh() {
+      if (_cacheRefreshEs) { _cacheRefreshEs.close(); }
+      _cacheRefreshEs = new EventSource("/api/contacts/cache/refresh/progress");
+      _cacheRefreshEs.onmessage = function(e) {
+        try {
+          var d = JSON.parse(e.data);
+          if (d.notRunning) {
+            _cacheRefreshEs.close(); _cacheRefreshEs = null;
+            hideCacheBanner(); return;
+          }
+          if (d.message) showCacheBanner(d.message, "info");
+          if (d.done) {
+            _cacheRefreshEs.close(); _cacheRefreshEs = null;
+            showCacheBanner("Contacts cache refreshed — " + d.count + " contacts.", "ok");
+            setTimeout(hideCacheBanner, 4000);
+            refreshCurrentContactsSection();
+          }
+          if (d.isError) {
+            _cacheRefreshEs.close(); _cacheRefreshEs = null;
+            showCacheBanner("Cache refresh failed: " + (d.message || "unknown error"), "warn");
+          }
+        } catch(ex) {}
+      };
+      _cacheRefreshEs.onerror = function() {
+        if (_cacheRefreshEs) { _cacheRefreshEs.close(); _cacheRefreshEs = null; }
+        hideCacheBanner();
+      };
+    }
+
+    function startCacheRefresh() {
+      showCacheBanner("Contacts data is out of date. Refreshing in the background…", "warn");
+      fetch("/api/contacts/cache/refresh", { method: "POST" })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (!d.success) {
+            showCacheBanner("Could not refresh contacts cache: " + (d.message || "unknown error"), "warn");
+            return;
+          }
+          watchCacheRefresh();
+        })
+        .catch(function(err) {
+          showCacheBanner("Could not refresh contacts cache: " + err.message, "warn");
+        });
+    }
+
+    function checkAndRefreshContactsCache() {
+      fetch("/api/contacts/cache-info")
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (d.refreshRunning) {
+            showCacheBanner("Contacts cache is being refreshed…", "info");
+            watchCacheRefresh();
+          } else if (d.stale) {
+            startCacheRefresh();
+          }
+        })
+        .catch(function() {});
+    }
+
     const dupBtn = document.getElementById("duplicates-btn");
     const dupSection = document.getElementById("duplicates-section");
     const dupContent = document.getElementById("duplicates-content");
@@ -1764,6 +1941,9 @@
       requireScmLogin(function() {
       hideAllSections();
       dupSection.style.display = "block";
+      document.getElementById("auto-merge-rules-card").classList.add("collapsed");
+      document.getElementById("auto-merge-run-card").classList.add("collapsed");
+      loadAutoMergeRules();
       dupBtn.disabled = true;
       dupContent.innerHTML = '<span class="text-muted">Scanning all contacts... this may take a minute</span>';
 
@@ -1791,6 +1971,359 @@
       }); // requireScmLogin
     });
 
+
+    // ── Collapsible cards ─────────────────────────────────────────────────
+    function toggleCollapsibleCard(cardId) {
+      var card = document.getElementById(cardId);
+      if (card) card.classList.toggle("collapsed");
+    }
+    document.getElementById("auto-merge-rules-card").querySelector(".section-heading")
+      .addEventListener("click", function() { toggleCollapsibleCard("auto-merge-rules-card"); });
+    document.getElementById("auto-merge-run-card").querySelector(".section-heading")
+      .addEventListener("click", function() { toggleCollapsibleCard("auto-merge-run-card"); });
+
+    // ── Auto-Merge Rules ──────────────────────────────────────────────────
+    var AM_FIELDS = [
+      ["email","Email"], ["phone","Phone"], ["name","Full Name"],
+      ["firstName","First Name"], ["lastName","Last Name"],
+      ["address","Address"], ["dob","Date of Birth"],
+      ["membershipStatus","Membership Status"]
+    ];
+    var AM_OPERATORS = [
+      ["same","same value (both non-empty)"],
+      ["one_empty","one is empty"],
+      ["both_empty","both are empty"],
+      ["both_present","both have a value"],
+      ["no_conflict","no conflict (same or at least one empty)"]
+    ];
+    var _amEditingId = null;
+    var _amRunEs = null;
+
+    function loadAutoMergeRules() {
+      var list = document.getElementById("auto-merge-rules-list");
+      list.innerHTML = '<span class="text-muted" style="font-size:0.88rem;">Loading rules…</span>';
+      fetch("/api/contacts/auto-merge/rules")
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          if (!d.rules || d.rules.length === 0) {
+            list.innerHTML = '<p style="color:var(--muted);font-size:0.88rem;margin:0;">No rules defined yet.</p>';
+            list.dataset.rules = "[]";
+            return;
+          }
+          var html = "";
+          d.rules.forEach(function(rule) {
+            var condSummary = rule.conditions.map(function(c) { return c.field + ": " + c.operator; }).join(" AND ");
+            html += '<div class="auto-merge-rule-card" style="padding:0.6rem 0.75rem;border:1px solid var(--border);border-radius:6px;margin-bottom:0.4rem;display:flex;align-items:flex-start;gap:0.75rem;">';
+            html += '<div style="flex:1;min-width:0;">';
+            html += '<div style="font-weight:600;font-size:0.9rem;">' + esc(rule.name) + '</div>';
+            html += '<div style="font-size:0.8rem;color:var(--muted);margin-top:0.15rem;">' + esc(condSummary) + '</div>';
+            html += '<div style="font-size:0.78rem;color:var(--muted);">Primary: ' + esc(rule.primarySelection) + '</div>';
+            html += '</div>';
+            html += '<div style="display:flex;align-items:center;gap:0.4rem;flex-shrink:0;">';
+            html += '<label style="display:flex;align-items:center;gap:0.25rem;font-size:0.82rem;cursor:pointer;">';
+            html += '<input type="checkbox" class="am-rule-enabled" data-id="' + esc(rule.id) + '"' + (rule.enabled ? " checked" : "") + '> On';
+            html += '</label>';
+            html += '<button class="merge-btn am-rule-edit" style="padding:0.2rem 0.5rem;font-size:0.8rem;" data-id="' + esc(rule.id) + '">Edit</button>';
+            html += '<button class="merge-btn am-rule-delete" style="padding:0.2rem 0.5rem;font-size:0.8rem;background:var(--danger);" data-id="' + esc(rule.id) + '">Delete</button>';
+            html += '</div></div>';
+          });
+          list.innerHTML = html;
+          list.dataset.rules = JSON.stringify(d.rules);
+          list.querySelectorAll(".am-rule-enabled").forEach(function(cb) {
+            cb.addEventListener("change", function() {
+              var id = cb.dataset.id;
+              var rules = JSON.parse(list.dataset.rules || "[]");
+              var rule = rules.find(function(r) { return r.id === id; });
+              if (!rule) return;
+              rule.enabled = cb.checked;
+              fetch("/api/contacts/auto-merge/rules/" + encodeURIComponent(id), {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(rule)
+              }).then(function(r) { return r.json(); })
+                .then(function(res) { if (!res.success) { cb.checked = !cb.checked; } });
+            });
+          });
+          list.querySelectorAll(".am-rule-edit").forEach(function(btn) {
+            btn.addEventListener("click", function() {
+              var id = btn.dataset.id;
+              var rules = JSON.parse(list.dataset.rules || "[]");
+              var rule = rules.find(function(r) { return r.id === id; });
+              if (rule) openRuleEditor(rule);
+            });
+          });
+          list.querySelectorAll(".am-rule-delete").forEach(function(btn) {
+            btn.addEventListener("click", function() {
+              if (!confirm("Delete this rule?")) return;
+              var id = btn.dataset.id;
+              fetch("/api/contacts/auto-merge/rules/" + encodeURIComponent(id), { method: "DELETE" })
+                .then(function(r) { return r.json(); })
+                .then(function(res) { if (res.success) loadAutoMergeRules(); });
+            });
+          });
+        })
+        .catch(function(err) {
+          list.innerHTML = '<span style="color:var(--danger);font-size:0.88rem;">Error loading rules: ' + esc(err.message) + '</span>';
+        });
+    }
+
+    function buildFieldSelect(val) {
+      var html = '<select class="am-cond-field" style="font-size:0.85rem;margin-right:0.25rem;">';
+      AM_FIELDS.forEach(function(f) { html += '<option value="' + f[0] + '"' + (val === f[0] ? " selected" : "") + '>' + f[1] + '</option>'; });
+      return html + '</select>';
+    }
+
+    function buildOperatorSelect(val) {
+      var html = '<select class="am-cond-operator" style="font-size:0.85rem;margin-right:0.25rem;">';
+      AM_OPERATORS.forEach(function(o) { html += '<option value="' + o[0] + '"' + (val === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; });
+      return html + '</select>';
+    }
+
+    function addConditionRow(field, operator) {
+      var cList = document.getElementById("auto-merge-conditions-list");
+      var row = document.createElement("div");
+      row.className = "am-cond-row";
+      row.style.cssText = "display:flex;align-items:center;gap:0.25rem;margin-bottom:0.35rem;flex-wrap:wrap;";
+      row.innerHTML = buildFieldSelect(field || "email") + buildOperatorSelect(operator || "same") +
+        '<button type="button" class="am-cond-remove" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1.1rem;line-height:1;padding:0;">×</button>';
+      row.querySelector(".am-cond-remove").addEventListener("click", function() { row.remove(); });
+      cList.appendChild(row);
+    }
+
+    function openRuleEditor(rule) {
+      _amEditingId = rule ? rule.id : null;
+      document.getElementById("auto-merge-editor-heading").textContent = rule ? "Edit Rule" : "Add Rule";
+      document.getElementById("auto-merge-rule-name").value = rule ? rule.name : "";
+      document.getElementById("auto-merge-rule-primary").value = rule ? (rule.primarySelection || "suggested") : "suggested";
+      document.getElementById("auto-merge-conditions-list").innerHTML = "";
+      document.getElementById("auto-merge-editor-msg").textContent = "";
+      if (rule && rule.conditions && rule.conditions.length > 0) {
+        rule.conditions.forEach(function(c) { addConditionRow(c.field, c.operator); });
+      } else {
+        addConditionRow();
+      }
+      document.getElementById("auto-merge-rule-editor").style.display = "block";
+      document.getElementById("auto-merge-rule-name").focus();
+    }
+
+    function closeRuleEditor() {
+      document.getElementById("auto-merge-rule-editor").style.display = "none";
+      _amEditingId = null;
+    }
+
+    document.getElementById("auto-merge-rules-add-btn").addEventListener("click", function() {
+      openRuleEditor(null);
+    });
+
+    document.getElementById("auto-merge-add-condition").addEventListener("click", function(e) {
+      e.preventDefault();
+      addConditionRow();
+    });
+
+    document.getElementById("auto-merge-editor-cancel").addEventListener("click", function() {
+      closeRuleEditor();
+    });
+
+    document.getElementById("auto-merge-editor-save").addEventListener("click", function() {
+      var saveBtn = document.getElementById("auto-merge-editor-save");
+      var msgEl = document.getElementById("auto-merge-editor-msg");
+      var name = document.getElementById("auto-merge-rule-name").value.trim();
+      var primary = document.getElementById("auto-merge-rule-primary").value;
+      var condRows = document.querySelectorAll("#auto-merge-conditions-list .am-cond-row");
+      var conditions = [];
+      condRows.forEach(function(row) {
+        conditions.push({
+          field: row.querySelector(".am-cond-field").value,
+          operator: row.querySelector(".am-cond-operator").value
+        });
+      });
+      if (!name) { msgEl.textContent = "Rule name is required."; return; }
+      if (conditions.length === 0) { msgEl.textContent = "At least one condition is required."; return; }
+      saveBtn.disabled = true;
+      msgEl.textContent = "";
+      var url = _amEditingId
+        ? "/api/contacts/auto-merge/rules/" + encodeURIComponent(_amEditingId)
+        : "/api/contacts/auto-merge/rules";
+      var method = _amEditingId ? "PUT" : "POST";
+      fetch(url, {
+        method: method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name, enabled: true, conditions: conditions, primarySelection: primary })
+      }).then(function(r) { return r.json(); })
+        .then(function(d) {
+          saveBtn.disabled = false;
+          if (d.success) { closeRuleEditor(); loadAutoMergeRules(); }
+          else { msgEl.textContent = d.message || "Save failed."; }
+        })
+        .catch(function(err) {
+          saveBtn.disabled = false;
+          msgEl.textContent = "Error: " + err.message;
+        });
+    });
+
+    var autoMergePreviewBtn = document.getElementById("auto-merge-preview-btn");
+    var autoMergeRunBtn = document.getElementById("auto-merge-run-btn");
+    var autoMergeProgress = document.getElementById("auto-merge-progress");
+
+    autoMergePreviewBtn.addEventListener("click", function() {
+      autoMergePreviewBtn.disabled = true;
+      autoMergePreviewBtn.textContent = "Loading…";
+      autoMergeProgress.innerHTML = "";
+      fetch("/api/contacts/auto-merge/preview")
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+          autoMergePreviewBtn.disabled = false;
+          autoMergePreviewBtn.textContent = "Preview";
+          if (!d.success) {
+            autoMergeProgress.innerHTML = '<span style="color:var(--danger);font-size:0.88rem;">' + esc(d.message || "Preview failed") + '</span>';
+            return;
+          }
+          var html = '<p style="margin:0 0 0.5rem;font-weight:600;">Preview: ' + d.wouldMerge.length + ' contact pair(s) would be merged.</p>';
+          if (d.wouldMerge.length > 0) {
+            html += '<table style="border-collapse:collapse;width:100%;font-size:0.85rem;margin-bottom:0.75rem;">';
+            html += '<thead><tr>';
+            html += '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);">Keep (primary)</th>';
+            html += '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);">Merge into primary</th>';
+            html += '<th style="text-align:left;padding:4px 8px;border-bottom:1px solid var(--border);">Rule</th>';
+            html += '</tr></thead><tbody>';
+            d.wouldMerge.forEach(function(m) {
+              html += '<tr>';
+              html += '<td style="padding:4px 8px;border-bottom:1px solid var(--border);">' + esc(m.primaryName) + '</td>';
+              html += '<td style="padding:4px 8px;border-bottom:1px solid var(--border);">' + esc(m.secondaryName) + '</td>';
+              html += '<td style="padding:4px 8px;border-bottom:1px solid var(--border);color:var(--muted);">' + esc(m.ruleName) + '</td>';
+              html += '</tr>';
+            });
+            html += '</tbody></table>';
+          }
+          if (d.skipped && d.skipped.length > 0) {
+            var noRuleCount = d.skipped.filter(function(s) { return s.reason === "no rule matched"; }).length;
+            var otherCount = d.skipped.length - noRuleCount;
+            var skipLabel = "Skipped (" + d.skipped.length + ")";
+            html += '<details style="font-size:0.85rem;"><summary style="cursor:pointer;color:var(--muted);">' + skipLabel + '</summary><div style="margin-top:0.5rem;">';
+            d.skipped.forEach(function(s) {
+              html += '<div style="padding:0.4rem 0;border-bottom:1px solid var(--border);">';
+              html += '<span style="font-weight:500;">' + esc(s.contactA) + '</span> / <span style="font-weight:500;">' + esc(s.contactB) + '</span>';
+              if (s.reason !== "no rule matched") {
+                html += ' <span style="color:var(--muted);font-size:0.8rem;">— ' + esc(s.reason) + '</span>';
+              } else if (s.ruleDetails && s.ruleDetails.length > 0) {
+                html += '<div style="margin-top:0.25rem;padding-left:0.75rem;">';
+                s.ruleDetails.forEach(function(rd) {
+                  if (rd.failedConditions.length === 0) return;
+                  html += '<div style="color:var(--muted);font-size:0.8rem;margin-bottom:0.1rem;">';
+                  html += '<em>' + esc(rd.ruleName) + '</em> — failed: ';
+                  html += rd.failedConditions.map(function(c) {
+                    return '<span style="color:var(--danger);">' + esc(c.field) + ': ' + esc(c.operator) + '</span>';
+                  }).join(', ');
+                  html += '</div>';
+                });
+                html += '</div>';
+              } else {
+                html += ' <span style="color:var(--muted);font-size:0.8rem;">— no enabled rules</span>';
+              }
+              html += '</div>';
+            });
+            html += '</div></details>';
+          }
+          autoMergeProgress.innerHTML = html;
+        })
+        .catch(function(err) {
+          autoMergePreviewBtn.disabled = false;
+          autoMergePreviewBtn.textContent = "Preview";
+          autoMergeProgress.innerHTML = '<span style="color:var(--danger);font-size:0.88rem;">Error: ' + esc(err.message) + '</span>';
+        });
+    });
+
+    function watchAutoMerge() {
+      if (_amRunEs) { _amRunEs.close(); }
+      var mergeLog = [];
+      autoMergeProgress.innerHTML = '<div id="am-run-log" style="font-size:0.85rem;"></div>';
+      var logEl = document.getElementById("am-run-log");
+      _amRunEs = new EventSource("/api/contacts/auto-merge/progress");
+      _amRunEs.onmessage = function(e) {
+        try {
+          var d = JSON.parse(e.data);
+          if (d.notRunning) {
+            _amRunEs.close(); _amRunEs = null;
+            autoMergeRunBtn.disabled = false;
+            autoMergeProgress.innerHTML = '<span class="text-muted" style="font-size:0.88rem;">No run in progress.</span>';
+            return;
+          }
+          if (d.phase === "evaluating") {
+            logEl.innerHTML = '<span style="color:var(--muted);">Evaluating ' + d.groupIndex + '/' + d.groupTotal + ': ' + esc(d.contactA) + ' vs ' + esc(d.contactB) + '…</span>';
+          } else if (d.phase === "merging") {
+            mergeLog.push('<div style="color:var(--success);">✓ ' + esc(d.secondaryName) + ' → ' + esc(d.primaryName) + ' <span style="color:var(--muted);font-size:0.8rem;">(rule: ' + esc(d.ruleName) + ', ' + d.groupIndex + '/' + d.groupTotal + ')</span></div>');
+            logEl.innerHTML = mergeLog.join("") + '<div style="color:var(--muted);">…</div>';
+          } else if (d.phase === "error") {
+            _amRunEs.close(); _amRunEs = null;
+            autoMergeRunBtn.disabled = false;
+            autoMergeProgress.innerHTML = '<span style="color:var(--danger);font-size:0.88rem;">Error: ' + esc(d.message || "unknown") + '</span>';
+          } else if (d.done) {
+            _amRunEs.close(); _amRunEs = null;
+            autoMergeRunBtn.disabled = false;
+            var html = '<p style="margin:0 0 0.5rem;font-weight:600;">Merged ' + d.merged + ' contact pair(s). Skipped ' + (d.skipped ? d.skipped.length : 0) + '.</p>';
+            if (d.mergedDetails && d.mergedDetails.length > 0) {
+              d.mergedDetails.forEach(function(m) {
+                html += '<div style="font-size:0.85rem;color:var(--success);">✓ ' + esc(m.secondaryName) + ' → ' + esc(m.primaryName) + ' <span style="color:var(--muted);font-size:0.8rem;">(rule: ' + esc(m.ruleName) + ')</span></div>';
+              });
+            }
+            if (d.skipped && d.skipped.length > 0) {
+              html += '<details style="font-size:0.85rem;margin-top:0.5rem;"><summary style="cursor:pointer;color:var(--muted);">Skipped (' + d.skipped.length + ')</summary><div style="margin-top:0.35rem;">';
+              d.skipped.forEach(function(s) {
+                html += '<div style="padding:0.2rem 0;border-bottom:1px solid var(--border);">' + esc(s.contactA) + ' / ' + esc(s.contactB) + ': <span style="color:var(--muted);">' + esc(s.reason) + '</span></div>';
+              });
+              html += '</div></details>';
+            }
+            autoMergeProgress.innerHTML = html;
+            if (d.merged > 0 && dupSection && dupSection.style.display !== "none") {
+              dupContent.innerHTML = '<span class="text-muted">Refreshing duplicates list…</span>';
+              fetch("/api/contacts/duplicates")
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  if ((data.definiteGroups.length + data.possibleGroups.length) === 0) {
+                    dupContent.innerHTML = "<p>No duplicate contacts found among " + data.totalContacts + " contacts.</p>";
+                  } else {
+                    var h = "<p style='margin-bottom:1rem;font-size:0.88rem;color:var(--muted);'>Scanned " + data.totalContacts + " contacts.</p>";
+                    h += renderSection("Definite Duplicates", data.definiteGroups, true);
+                    h += renderSection("Possible Duplicates", data.possibleGroups, true);
+                    dupContent.innerHTML = h;
+                  }
+                })
+                .catch(function() {});
+            }
+          }
+        } catch(ex) {}
+      };
+      _amRunEs.onerror = function() {
+        if (_amRunEs) { _amRunEs.close(); _amRunEs = null; }
+        autoMergeRunBtn.disabled = false;
+      };
+    }
+
+    autoMergeRunBtn.addEventListener("click", function() {
+      requireScmLogin(function() {
+        autoMergeRunBtn.disabled = true;
+        autoMergeProgress.innerHTML = '<span class="text-muted" style="font-size:0.88rem;">Starting…</span>';
+        fetch("/api/contacts/auto-merge/run", { method: "POST" })
+          .then(function(r) { return r.json(); })
+          .then(function(d) {
+            if (!d.success) {
+              if (d.message && d.message.indexOf("already running") >= 0) {
+                watchAutoMerge();
+              } else {
+                autoMergeRunBtn.disabled = false;
+                autoMergeProgress.innerHTML = '<span style="color:var(--danger);font-size:0.88rem;">' + esc(d.message || "Failed to start") + '</span>';
+              }
+              return;
+            }
+            watchAutoMerge();
+          })
+          .catch(function(err) {
+            autoMergeRunBtn.disabled = false;
+            autoMergeProgress.innerHTML = '<span style="color:var(--danger);font-size:0.88rem;">Error: ' + esc(err.message) + '</span>';
+          });
+      });
+    });
+
     // ── Repair Contact Names ──────────────────────────────────────────────
     const nameRepairBtn = document.getElementById("name-repair-btn");
     const nameRepairSection = document.getElementById("name-repair-section");
@@ -1800,6 +2333,7 @@
     nameRepairBtn.addEventListener("click", function() {
       hideAllSections();
       nameRepairSection.style.display = "block";
+      checkAndRefreshContactsCache();
     });
 
     nameRepairRunBtn.addEventListener("click", function() {
@@ -1821,7 +2355,7 @@
             return;
           }
           var html = "<p style='margin-bottom:0.75rem;font-size:0.88rem;'><strong>" + data.total + "</strong> contact(s) with name issues:</p>";
-          html += "<table class='data-table'><thead><tr><th>Exclude</th><th>Contact</th><th>Field</th><th>Current value</th><th>Suggested</th><th>Issues</th></tr></thead><tbody>";
+          html += "<table class='data-table'><thead><tr><th>Exclude</th><th>Ignore</th><th>Contact</th><th>Field</th><th>Current value</th><th>Suggested</th><th>Issues</th></tr></thead><tbody>";
           data.issues.forEach(function(row) {
             var link = '<a href="https://exesc.clubmin.net/contacts/' + esc(row.id) + '" target="_blank" rel="noopener">' + esc(row.name) + '</a>';
             var fields = [["First name", row.firstName], ["Last name", row.lastName]].filter(function(p) { return !!p[1]; });
@@ -1830,7 +2364,8 @@
               var label = pair[0], issue = pair[1];
               html += "<tr>";
               if (fi === 0) {
-                html += "<td rowspan='" + rowspan + "' style='text-align:center;vertical-align:middle;'><input type='checkbox' id='exclude-" + esc(row.id) + "' title='Exclude from export'></td>";
+                html += "<td rowspan='" + rowspan + "' style='text-align:center;vertical-align:middle;'><input type='checkbox' id='exclude-" + esc(row.id) + "'" + (row.ignored ? " checked" : "") + " title='Exclude from export'></td>";
+                html += "<td rowspan='" + rowspan + "' style='text-align:center;vertical-align:middle;'><input type='checkbox' id='ignore-" + esc(row.id) + "'" + (row.ignored ? " checked" : "") + " data-name='" + esc(row.name) + "' title='Permanently ignore this contact'></td>";
                 html += "<td rowspan='" + rowspan + "'>" + link + "</td>";
               }
               html += "<td style='white-space:nowrap;'>" + label + "</td>";
@@ -1850,11 +2385,29 @@
           html += "<div id='name-repair-import-result' style='margin-top:0.5rem;'></div>";
           nameRepairResult.innerHTML = html;
 
+          // Wire up "Permanently ignore" checkboxes
+          nameRepairResult.querySelectorAll('[id^="ignore-"]').forEach(function(cb) {
+            cb.addEventListener("change", function() {
+              var contactId = cb.id.replace("ignore-", "");
+              var ignored = cb.checked;
+              var name = cb.getAttribute("data-name") || contactId;
+              // Keep the "exclude" checkbox in sync
+              var excludeEl = document.getElementById("exclude-" + contactId);
+              if (excludeEl) excludeEl.checked = ignored;
+              fetch("/api/contacts/name-repair/ignore", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ contactId: contactId, name: name, ignored: ignored })
+              }).catch(function() {});
+            });
+          });
+
           function buildCsvRows() {
             var rows = [["uid", "first_name", "last_name"]];
             data.issues.forEach(function(row) {
               var excludeEl = document.getElementById("exclude-" + row.id);
-              if (excludeEl && excludeEl.checked) return;
+              var ignoreEl = document.getElementById("ignore-" + row.id);
+              if ((excludeEl && excludeEl.checked) || (ignoreEl && ignoreEl.checked)) return;
               var firstName = row.firstName ? row.firstName.suggested : row.originalFirstName;
               var lastName  = row.lastName  ? row.lastName.suggested  : row.originalLastName;
               rows.push([row.id, firstName, lastName]);
@@ -1958,9 +2511,12 @@
               .then(function(resp) {
                 applyBtn.disabled = false;
                 applyBtn.textContent = "Apply Fixes";
-                importResult.innerHTML = resp.success
-                  ? "<span style='color:var(--success);font-size:0.88rem;'>\u2713 " + esc(resp.message) + "</span>"
-                  : "<span style='color:var(--danger);font-size:0.88rem;'>" + esc(resp.message) + "</span>";
+                if (resp.success) {
+                  importResult.innerHTML = "<span style='color:var(--success);font-size:0.88rem;'>\u2713 " + esc(resp.message) + " Re-checking\u2026</span>";
+                  setTimeout(function() { nameRepairRunBtn.click(); }, 1500);
+                } else {
+                  importResult.innerHTML = "<span style='color:var(--danger);font-size:0.88rem;'>" + esc(resp.message) + "</span>";
+                }
               })
               .catch(function(err) {
                 applyBtn.disabled = false;
@@ -2531,12 +3087,19 @@
       });
     });
 
+    function setScanActive(active) {
+      document.getElementById("consents-action-row").style.display = active ? "none" : "";
+      document.getElementById("consents-scan-active").style.display = active ? "block" : "none";
+      if (!active) document.getElementById("consents-cancel-btn").disabled = false;
+    }
+
+    var _activeScanEs = null;
+
     function startConsentScan(force) {
       if (consentsScanRunning) return;
       if (!force && document.getElementById("consents-scan-btn").disabled) return;
       consentsScanRunning = true;
-      document.getElementById("consents-scan-btn").disabled = true;
-      document.getElementById("consents-force-btn").disabled = true;
+      setScanActive(true);
       document.getElementById("consents-progress").style.display = "block";
       document.getElementById("consents-progress-bar").style.width = "0";
       document.getElementById("consents-progress-text").textContent = "Starting scan...";
@@ -2547,27 +3110,40 @@
           if (!data.success) {
             document.getElementById("consents-progress-text").textContent = "Error: " + data.message;
             consentsScanRunning = false;
+            setScanActive(false);
             return;
           }
           var es = new EventSource("/api/consents/scan/progress");
+          _activeScanEs = es;
           es.onmessage = function(e) {
             var d = JSON.parse(e.data);
             if (d.notRunning) {
-              es.close();
+              es.close(); _activeScanEs = null;
               consentsScanRunning = false;
+              setScanActive(false);
               document.getElementById("consents-progress").style.display = "none";
               loadConsents();
               return;
             }
-            if (d.isError) {
-              es.close();
+            if (d.cancelled) {
+              es.close(); _activeScanEs = null;
               consentsScanRunning = false;
+              setScanActive(false);
+              document.getElementById("consents-progress-text").textContent = "Scan cancelled.";
+              setTimeout(function() { document.getElementById("consents-progress").style.display = "none"; }, 2000);
+              return;
+            }
+            if (d.isError) {
+              es.close(); _activeScanEs = null;
+              consentsScanRunning = false;
+              setScanActive(false);
               document.getElementById("consents-progress-text").textContent = "Scan error: " + d.message;
               return;
             }
             if (d.complete) {
-              es.close();
+              es.close(); _activeScanEs = null;
               consentsScanRunning = false;
+              setScanActive(false);
               document.getElementById("consents-progress-bar").style.width = "100%";
               document.getElementById("consents-progress-text").textContent = "Scan complete — " + d.total + " contacts checked.";
               setTimeout(function() {
@@ -2578,20 +3154,31 @@
             }
             var pct = d.total > 0 ? Math.round((d.done / d.total) * 100) : 0;
             document.getElementById("consents-progress-bar").style.width = pct + "%";
-            document.getElementById("consents-progress-text").textContent =
-              d.contact;
+            document.getElementById("consents-progress-text").textContent = d.contact;
           };
           es.onerror = function() {
-            es.close();
+            es.close(); _activeScanEs = null;
             consentsScanRunning = false;
+            setScanActive(false);
             document.getElementById("consents-progress-text").textContent = "Connection lost — please try again.";
           };
         })
         .catch(function(err) {
           consentsScanRunning = false;
+          setScanActive(false);
           document.getElementById("consents-progress-text").textContent = "Error: " + err.message;
         });
     }
+
+    document.getElementById("consents-cancel-btn").addEventListener("click", function() {
+      this.disabled = true;
+      if (_activeScanEs) { _activeScanEs.close(); _activeScanEs = null; }
+      fetch("/api/consents/scan/cancel", { method: "POST" })
+        .catch(function() {});
+      consentsScanRunning = false;
+      setScanActive(false);
+      document.getElementById("consents-progress-text").textContent = "Cancelling scan…";
+    });
 
     document.getElementById("consents-scan-btn").addEventListener("click", function() {
       startConsentScan(false);
@@ -2706,6 +3293,51 @@
       hideAllSections();
       document.getElementById("scheduler-section").style.display = "block";
       loadScheduler();
+    });
+
+    // Applications section
+    document.getElementById("applications-btn").addEventListener("click", function() {
+      hideAllSections();
+      document.getElementById("applications-section").style.display = "block";
+    });
+
+    document.getElementById("download-applications-btn").addEventListener("click", function() {
+      var btn = document.getElementById("download-applications-btn");
+      var msg = document.getElementById("applications-msg");
+      msg.textContent = "";
+      requireScmLogin(function() {
+        btn.disabled = true;
+        btn.querySelector(".tab-dot") && (btn.querySelector(".tab-dot").style.display = "none");
+        btn.childNodes[btn.childNodes.length - 1].textContent = " Downloading…";
+        fetch("/api/applications/export")
+          .then(function(r) {
+            if (!r.ok) return r.text().then(function(t) {
+              var msg = "Export failed (" + r.status + ")";
+              try { msg = JSON.parse(t).message || msg; } catch {}
+              throw new Error(msg);
+            });
+            return r.blob();
+          })
+          .then(function(blob) {
+            var date = new Date().toISOString().slice(0, 10);
+            var a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "applications-" + date + ".csv";
+            a.click();
+            URL.revokeObjectURL(a.href);
+            msg.style.color = "var(--success)";
+            msg.textContent = "Downloaded successfully.";
+          })
+          .catch(function(err) {
+            msg.style.color = "var(--danger)";
+            msg.textContent = err.message || "Download failed.";
+          })
+          .finally(function() {
+            btn.disabled = false;
+            if (btn.querySelector(".tab-dot")) btn.querySelector(".tab-dot").style.display = "";
+            btn.childNodes[btn.childNodes.length - 1].textContent = " Download CSV";
+          });
+      });
     });
 
     function loadScheduler() {
@@ -3082,8 +3714,9 @@
           ] },
         { id: 'admin',    label: 'Admin',           type: 'group',
           tools: [
-            { btn: 'users-btn',       label: 'Users',       desc: 'Manage who can sign in and what they can do.' },
-            { btn: 'clear-cache-btn', label: 'Clear Cache', desc: 'Force a fresh fetch from SCM next request.' },
+            { btn: 'users-btn',         label: 'Users',        desc: 'Manage who can sign in and what they can do.' },
+            { btn: 'clear-cache-btn',   label: 'Clear Cache',  desc: 'Force a fresh fetch from SCM next request.' },
+            { btn: 'applications-btn',  label: 'Applications', desc: 'Download membership applications as CSV.' },
           ] },
         { id: 'help',     label: 'Help',            type: 'leaf' },
       ];
@@ -3145,7 +3778,8 @@
           'minutes-section':     'minutes-btn',
           'consents-section':    'consents-btn',
           'users-section':       'users-btn',
-          'scheduler-section':   'scheduler-btn',
+          'scheduler-section':     'scheduler-btn',
+          'applications-section':  'applications-btn',
         };
         const GROUP_LABEL = { contacts:'Contacts', tasks:'Tasks & Status', content:'Content', admin:'Admin' };
         Object.keys(SECTION_BTN_MAP).forEach(sid => {
@@ -3276,7 +3910,7 @@
         ];
 
         function showHome() {
-          ['tasks-section','duplicates-section','name-repair-section','email-issues-section','minutes-section','consents-section','users-section','scheduler-section','help-section'].forEach(id => {
+          ['tasks-section','duplicates-section','name-repair-section','email-issues-section','minutes-section','consents-section','users-section','scheduler-section','applications-section','help-section'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.style.display = 'none';
           });
@@ -3321,7 +3955,7 @@
         const tryShowHome = () => {
           if (dashEl.style.display === 'block' || dashEl.style.display === '') {
             // Only auto-show home if no other section is open
-            const anyOpen = ['tasks-section','duplicates-section','name-repair-section','email-issues-section','minutes-section','consents-section','users-section','scheduler-section','help-section']
+            const anyOpen = ['tasks-section','duplicates-section','name-repair-section','email-issues-section','minutes-section','consents-section','users-section','scheduler-section','applications-section','help-section']
               .some(id => { const el = document.getElementById(id); return el && el.style.display === 'block'; });
             if (!anyOpen && home.style.display !== 'block') {
               showHome();

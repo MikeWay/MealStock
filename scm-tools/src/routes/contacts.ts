@@ -1,6 +1,7 @@
+import { EventEmitter } from "events";
 import { Router } from "express";
 import { getScmClient } from "../scraper/client.js";
-import { addTagToContactInCache, clearContactsCache, fetchContacts, loadContactsFromCache } from "../scraper/contacts.js";
+import { addTagToContactInCache, clearContactsCache, fetchContacts, getContactsCacheInfo, loadContactsFromCache, loadIgnoredContacts, setContactIgnored } from "../scraper/contacts.js";
 import { findDuplicateGroups } from "../scraper/duplicates.js";
 import { mergeContacts, previewMerge } from "../scraper/merge.js";
 import { prepareContactNamesImport, confirmContactNamesImport, cancelPendingImport, applyContactNamesFixes } from "../scraper/nameRepair.js";
@@ -247,6 +248,8 @@ router.get("/api/contacts/name-issues", requirePermission("duplicates", "view"),
     return issues.length > 0 ? { currentValue: value, issues, suggested } : null;
   }
 
+  const ignoredIds = new Set(loadIgnoredContacts().map(r => r.contactId));
+
   const nameIssues = contacts
     .map((c) => ({
       id: c.id,
@@ -255,10 +258,92 @@ router.get("/api/contacts/name-issues", requirePermission("duplicates", "view"),
       originalLastName: c.lastName,
       firstName: checkName(c.firstName, false),
       lastName: checkName(c.lastName, true),
+      ignored: ignoredIds.has(c.id),
     }))
     .filter((r) => r.firstName !== null || r.lastName !== null);
 
   res.json({ success: true, total: nameIssues.length, issues: nameIssues });
+});
+
+router.post("/api/contacts/name-repair/ignore", requirePermission("duplicates", "view"), (req, res) => {
+  const { contactId, name, ignored } = req.body as { contactId?: string; name?: string; ignored?: boolean };
+  if (!contactId || typeof ignored !== "boolean") {
+    res.status(400).json({ success: false, message: "contactId and ignored (boolean) required" });
+    return;
+  }
+  setContactIgnored(contactId, name ?? contactId, ignored);
+  res.json({ success: true });
+});
+
+// ── Contacts cache refresh ────────────────────────────────────────────────────
+
+const cacheRefreshEmitter = new EventEmitter();
+let cacheRefreshRunning = false;
+
+router.get("/api/contacts/cache-info", requirePermission("duplicates", "view"), (_req, res) => {
+  res.json({ ...getContactsCacheInfo(), refreshRunning: cacheRefreshRunning });
+});
+
+router.post("/api/contacts/cache/refresh", requirePermission("duplicates", "view"), async (req, res) => {
+  if (cacheRefreshRunning) {
+    res.json({ success: false, message: "Refresh already in progress" });
+    return;
+  }
+  if (!getScmClient(req.session.userEmail!).loggedIn) {
+    res.status(401).json({ success: false, message: "Not logged in to SCM" });
+    return;
+  }
+  res.json({ success: true });
+  cacheRefreshRunning = true;
+  (async () => {
+    const page = await getScmClient(req.session.userEmail!).getPage();
+    try {
+      cacheRefreshEmitter.emit("status", { message: "Requesting contact export from SCM…" });
+      const contacts = await fetchContacts(page, (attempt) => {
+        cacheRefreshEmitter.emit("status", {
+          message: `Waiting for SCM to generate export file… (attempt ${attempt})`,
+        });
+      });
+      cacheRefreshEmitter.emit("done", { count: contacts.length });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Unknown error";
+      cacheRefreshEmitter.emit("error", { message });
+    } finally {
+      await page.close();
+      cacheRefreshRunning = false;
+    }
+  })();
+});
+
+router.get("/api/contacts/cache/refresh/progress", requirePermission("duplicates", "view"), (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
+
+  if (!cacheRefreshRunning) {
+    res.write(`data: ${JSON.stringify({ notRunning: true })}\n\n`);
+    res.end();
+    return;
+  }
+
+  const send = (data: object) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+  const onStatus = (data: object) => send(data);
+  const onDone  = (data: object) => { send({ ...data, done: true }); res.end(); cleanup(); };
+  const onError = (data: object) => { send({ ...data, isError: true }); res.end(); cleanup(); };
+  const keepAlive = setInterval(() => res.write(": keepalive\n\n"), 15_000);
+
+  function cleanup() {
+    clearInterval(keepAlive);
+    cacheRefreshEmitter.off("status", onStatus);
+    cacheRefreshEmitter.off("done", onDone);
+    cacheRefreshEmitter.off("error", onError);
+  }
+
+  cacheRefreshEmitter.on("status", onStatus);
+  cacheRefreshEmitter.on("done", onDone);
+  cacheRefreshEmitter.on("error", onError);
+  req.on("close", cleanup);
 });
 
 export default router;

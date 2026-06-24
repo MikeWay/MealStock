@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from "fs";
 import path from "path";
 import type { Page } from "playwright";
 import { SCM_BASE_URL } from "../config.js";
@@ -19,6 +19,45 @@ export interface Contact {
 }
 
 const CACHE_DIR = ".cache";
+const IGNORE_FILE = path.join(CACHE_DIR, "name-repair-ignored.json");
+
+export interface IgnoredContactRecord {
+  contactId: string;
+  name: string;
+  ignoredAt: string;
+}
+
+export function loadIgnoredContacts(): IgnoredContactRecord[] {
+  if (!existsSync(IGNORE_FILE)) return [];
+  try { return JSON.parse(readFileSync(IGNORE_FILE, "utf-8")) as IgnoredContactRecord[]; }
+  catch { return []; }
+}
+
+export function setContactIgnored(contactId: string, name: string, ignored: boolean): void {
+  if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
+  const records = loadIgnoredContacts();
+  if (ignored) {
+    if (!records.find(r => r.contactId === contactId)) {
+      records.push({ contactId, name, ignoredAt: new Date().toISOString() });
+    }
+  } else {
+    const idx = records.findIndex(r => r.contactId === contactId);
+    if (idx >= 0) records.splice(idx, 1);
+  }
+  writeFileSync(IGNORE_FILE, JSON.stringify(records, null, 2), "utf-8");
+}
+
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+export function getContactsCacheInfo(): { exists: boolean; ageMs: number; stale: boolean } {
+  if (!existsSync(CACHE_DIR)) return { exists: false, ageMs: Infinity, stale: true };
+  const files = readdirSync(CACHE_DIR)
+    .filter(f => f.startsWith("contact-export") && f.endsWith(".csv"))
+    .sort().reverse();
+  if (files.length === 0) return { exists: false, ageMs: Infinity, stale: true };
+  const ageMs = Date.now() - statSync(path.join(CACHE_DIR, files[0])).mtimeMs;
+  return { exists: true, ageMs, stale: ageMs > CACHE_MAX_AGE_MS };
+}
 
 /**
  * Loads contacts from the most recent cached CSV without hitting SCM.
@@ -43,6 +82,34 @@ export function clearContactsCache(): number {
     unlinkSync(path.join(CACHE_DIR, f));
   }
   return files.length;
+}
+
+/** Removes a contact row by ID from the most recent cached CSV. */
+export function removeContactFromCache(contactId: string): void {
+  if (!existsSync(CACHE_DIR)) return;
+  const files = readdirSync(CACHE_DIR)
+    .filter((f) => f.startsWith("contact-export") && f.endsWith(".csv"))
+    .sort()
+    .reverse();
+  if (files.length === 0) return;
+
+  const filePath = path.join(CACHE_DIR, files[0]);
+  const csvContent = readFileSync(filePath, "utf-8");
+  const lines = csvContent.split("\n");
+  if (lines.length < 2) return;
+
+  const header = parseRow(lines[0]);
+  const uidIdx = header.indexOf("uid");
+  if (uidIdx < 0) return;
+
+  const newLines = lines.filter((line, i) => {
+    if (i === 0 || !line.trim()) return true;
+    return parseRow(line)[uidIdx] !== contactId;
+  });
+
+  if (newLines.length !== lines.length) {
+    writeFileSync(filePath, newLines.join("\n"), "utf-8");
+  }
 }
 
 /**
@@ -93,7 +160,7 @@ export function addTagToContactInCache(contactId: string, tag: string): void {
  * Flow: select all contacts → export → queue for download → poll job
  * queue → download CSV → parse.
  */
-export async function fetchContacts(page: Page): Promise<Contact[]> {
+export async function fetchContacts(page: Page, onPollAttempt?: (attempt: number) => void): Promise<Contact[]> {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const cacheFile = path.join(CACHE_DIR, `contact-export${today}.csv`);
 
@@ -141,7 +208,7 @@ export async function fetchContacts(page: Page): Promise<Contact[]> {
   await page.waitForLoadState("domcontentloaded");
 
   // Step 4: Poll /active_jobs until the CSV is ready
-  const csvFilename = await waitForExportReady(page);
+  const csvFilename = await waitForExportReady(page, 5 * 60_000, 5_000, onPollAttempt);
 
   // Step 5: Download the CSV by clicking its link
   const csvContent = await downloadExport(page, csvFilename);
@@ -158,12 +225,14 @@ export async function fetchContacts(page: Page): Promise<Contact[]> {
 async function waitForExportReady(
   page: Page,
   maxWaitMs = 5 * 60_000,
-  pollIntervalMs = 5_000
+  pollIntervalMs = 5_000,
+  onPollAttempt?: (attempt: number) => void
 ): Promise<string> {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const expectedPrefix = `contact-export${today}`;
 
   const deadline = Date.now() + maxWaitMs;
+  let attempt = 0;
 
   while (Date.now() < deadline) {
     await page.goto(`${SCM_BASE_URL}/active_jobs`, {
@@ -177,6 +246,8 @@ async function waitForExportReady(
       return text;
     }
 
+    attempt++;
+    onPollAttempt?.(attempt);
     await page.waitForTimeout(pollIntervalMs);
   }
 
@@ -284,7 +355,7 @@ function parseCsv(csv: string): Contact[] {
   return contacts;
 }
 
-export function countContactNameIssues(contacts: Contact[]): number {
+export function countContactNameIssues(contacts: Contact[], ignoredIds?: Set<string>): number {
   function toProperCase(value: string, isLastName: boolean): string {
     if (value.length === 0) return value;
     let s = value.toLowerCase();
@@ -303,7 +374,10 @@ export function countContactNameIssues(contacts: Contact[]): number {
     if (val !== trimmed) return true;
     return trimmed.length > 0 && trimmed !== toProperCase(trimmed, isLastName);
   }
-  return contacts.filter(c => hasIssue(c.firstName, false) || hasIssue(c.lastName, true)).length;
+  return contacts.filter(c =>
+    !ignoredIds?.has(c.id) &&
+    (hasIssue(c.firstName, false) || hasIssue(c.lastName, true))
+  ).length;
 }
 
 /** Simple CSV row parser that handles quoted fields with commas and escaped quotes. */
