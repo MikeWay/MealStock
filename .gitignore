@@ -3,3 +3,4 @@ dist/
 .omc/
 .env
 lightsail-deploy.json
+exe-sc-tools-deploy.json
