@@ -5,3 +5,5 @@ dist/
 .claude/
 *.bat
 npm-debug.log
+scm-tools/
+boatmanager/
