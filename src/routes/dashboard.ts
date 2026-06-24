@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { countContactNameIssues, loadContactsFromCache } from "../scraper/contacts.js";
-import { loadConsentCache } from "../scraper/consents.js";
+import { countContactNameIssues, loadContactsFromCache, loadIgnoredContacts } from "../scraper/contacts.js";
+import { loadConsentCache, loadWithdrawals } from "../scraper/consents.js";
 import { findDuplicateGroups } from "../scraper/duplicates.js";
 import { getPrefetchData } from "../scraper/prefetch.js";
 import { getJobsStatus } from "../scheduler/index.js";
@@ -15,13 +15,18 @@ router.get("/api/dashboard/summary", (req, res) => {
   if (contacts) {
     const { definiteGroups, possibleGroups } = findDuplicateGroups(contacts);
     duplicates = definiteGroups.length + possibleGroups.length;
-    nameIssues = countContactNameIssues(contacts);
+    const ignoredIds = new Set(loadIgnoredContacts().map(r => r.contactId));
+    nameIssues = countContactNameIssues(contacts, ignoredIds);
   }
 
   const consentCache = loadConsentCache();
-  const consentsGranted = consentCache
-    ? consentCache.contacts.filter((c) => c.status === "consented").length
-    : null;
+  let consentsGranted: number | null = null;
+  if (consentCache) {
+    const withdrawnIds = new Set(loadWithdrawals().map(w => w.contactId));
+    consentsGranted = consentCache.contacts.filter(
+      c => c.status === "consented" && !withdrawnIds.has(c.contactId)
+    ).length;
+  }
 
   const schedulerFailed = getJobsStatus().filter((j) => j.lastStatus === "failed").length;
 

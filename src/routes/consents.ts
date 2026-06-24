@@ -20,6 +20,7 @@ const router = Router();
 router.use(requirePermission("consents", "view"));
 const scanEmitter = new EventEmitter();
 let scanRunning = false;
+let scanCancelled = false;
 
 type ReportStatus = "consented" | "not_consented" | "no_record" | "withdrawn";
 
@@ -73,14 +74,17 @@ router.post("/api/consents/scan", async (req, res) => {
   res.json({ success: true, message: "Scan started" });
 
   scanRunning = true;
+  scanCancelled = false;
   (async () => {
     const page = await getScmClient(req.session.userEmail!).getPage();
     try {
       const contacts = await fetchContacts(page);
 
-      const consentMap = await fetchAllConsents(page, (done, total, name) => {
-        scanEmitter.emit("progress", { done, total, contact: name });
-      });
+      const consentMap = await fetchAllConsents(
+        page,
+        (done, total, name) => { scanEmitter.emit("progress", { done, total, contact: name }); },
+        () => scanCancelled
+      );
 
       const results: ContactConsentRecord[] = contacts.map((c) => ({
         contactId: c.id,
@@ -93,11 +97,16 @@ router.post("/api/consents/scan", async (req, res) => {
       saveConsentCache(cache);
       scanEmitter.emit("complete", { total: results.length });
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Unknown error during scan";
-      scanEmitter.emit("error", { message });
+      if (err instanceof Error && err.message === "__cancelled__") {
+        scanEmitter.emit("cancelled", {});
+      } else {
+        const message = err instanceof Error ? err.message : "Unknown error during scan";
+        scanEmitter.emit("error", { message });
+      }
     } finally {
       await page.close();
       scanRunning = false;
+      scanCancelled = false;
     }
   })();
 });
@@ -119,6 +128,7 @@ router.get("/api/consents/scan/progress", (req, res) => {
   const onProgress = (data: object) => send(data);
   const onComplete = (data: object) => { send({ ...data, complete: true }); res.end(); cleanup(); };
   const onError = (data: object) => { send({ ...data, isError: true }); res.end(); cleanup(); };
+  const onCancelled = () => { send({ cancelled: true }); res.end(); cleanup(); };
 
   // Keep the connection alive during long polling phases
   const keepAlive = setInterval(() => res.write(": keepalive\n\n"), 15_000);
@@ -128,12 +138,23 @@ router.get("/api/consents/scan/progress", (req, res) => {
     scanEmitter.off("progress", onProgress);
     scanEmitter.off("complete", onComplete);
     scanEmitter.off("error", onError);
+    scanEmitter.off("cancelled", onCancelled);
   }
 
   scanEmitter.on("progress", onProgress);
   scanEmitter.on("complete", onComplete);
   scanEmitter.on("error", onError);
+  scanEmitter.on("cancelled", onCancelled);
   req.on("close", cleanup);
+});
+
+router.post("/api/consents/scan/cancel", (_req, res) => {
+  if (!scanRunning) {
+    res.json({ success: false, message: "No scan in progress" });
+    return;
+  }
+  scanCancelled = true;
+  res.json({ success: true });
 });
 
 router.post("/api/consents/withdraw", requirePermission("consents", "full"), (req, res) => {

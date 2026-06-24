@@ -84,7 +84,13 @@ function areNamesSimilar(
   lastNameThreshold: number,
   firstNameThreshold: number
 ): boolean {
-  const lastSim = diceCoefficient(normLast[idxA], normLast[idxB]);
+  const la = normLast[idxA];
+  const lb = normLast[idxB];
+  if (la === lb + "s" || lb === la + "s") return false;
+  const [shorter, longer] = la.length <= lb.length ? [la, lb] : [lb, la];
+  if (longer.startsWith(shorter) && longer.length - shorter.length >= 2) return false;
+
+  const lastSim = diceCoefficient(la, lb);
   if (lastSim < lastNameThreshold) return false;
 
   const firstSim = diceCoefficient(normFirst[idxA], normFirst[idxB]);

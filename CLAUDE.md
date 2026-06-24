@@ -29,6 +29,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |------|--------|-------|
 | `src/routes/auth.ts` | `/api/auth`, `/api/users` | Dashboard login, SCM login/MFA, password reset, user management, invite flow |
 | `src/routes/contacts.ts` | `/api/contacts` | Duplicates, merge, name repair, non-duplicate tagging |
+| `src/routes/autoMerge.ts` | `/api/contacts/auto-merge` | Auto-merge rules CRUD, preview, SSE-streamed run; requires `duplicates: full` |
+| `src/routes/applications.ts` | `/api/applications/export` | Download all membership applications as CSV; requires `users: full` |
 | `src/routes/consents.ts` | `/api/consents` | Consent scan (view+), withdraw/clear (full only) |
 | `src/routes/tasks.ts` | `/api/tasks` | SCM attention items |
 | `src/routes/emailIssues.ts` | `/api/email-issues` | Email bounce detection and reset |
@@ -41,15 +43,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | File | Purpose |
 |------|---------|
+| `src/scraper/index.ts` | Shared `launchBrowser` / `saveState` helpers (Playwright browser + context lifecycle) |
 | `src/scraper/client.ts` | Per-user `ScmClient` with `loggedIn`, `connecting` flags; `tryAutoConnect()` |
 | `src/scraper/contacts.ts` | Load/parse contact CSV cache; `addTagToContactInCache`; `countContactNameIssues` |
 | `src/scraper/duplicates.ts` | `findDuplicateGroups` — Dice-coefficient name similarity, definite vs possible with reason |
 | `src/scraper/merge.ts` | Contact merge via SCM UI |
+| `src/scraper/autoMergeRules.ts` | Rule storage (`.cache/auto-merge-rules.json`), evaluation (`ruleMatches`, `evaluateCondition`), primary selection |
+| `src/scraper/nameRepair.ts` | Two-phase CSV import for contact name fixes: `prepareContactNamesImport` → `confirmContactNamesImport` / `cancelPendingImport` |
 | `src/scraper/tags.ts` | Add tag via SCM view-page inline editor |
 | `src/scraper/consents.ts` | Consent fetch; withdrawal records; cache freshness |
 | `src/scraper/emailIssues.ts` | Fetch and reset email bounce records |
 | `src/scraper/tasks.ts` | Fetch SCM attention items |
 | `src/scraper/prefetch.ts` | Background prefetch of tasks + email issue counts on startup |
+| `src/scraper/stackcp.ts` | StackCP FTP account automation — locks then unlocks all accounts for 28 days (`enableFtp`) |
+| `src/scraper/applications.ts` | `fetchApplications` — scrapes `/apps` list then each detail page; returns 14-field `Application[]` |
 
 ## Permissions
 

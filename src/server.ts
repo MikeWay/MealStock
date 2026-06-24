@@ -6,11 +6,13 @@ import authRoutes from "./routes/auth.js";
 import rolesRoutes from "./routes/roles.js";
 import tasksRoutes from "./routes/tasks.js";
 import contactsRoutes from "./routes/contacts.js";
+import autoMergeRoutes from "./routes/autoMerge.js";
 import emailIssuesRoutes from "./routes/emailIssues.js";
 import minutesRoutes from "./routes/minutes.js";
 import consentsRoutes from "./routes/consents.js";
 import schedulerRoutes from "./routes/scheduler.js";
 import dashboardRoutes from "./routes/dashboard.js";
+import applicationsRoutes from "./routes/applications.js";
 import { SESSION_SECRET } from "./config.js";
 import { registerJobs } from "./scheduler/index.js";
 import { requireAuth } from "./middleware/requireAuth.js";
@@ -46,11 +48,13 @@ app.use(requireAuth);
 app.use(rolesRoutes);
 app.use(tasksRoutes);
 app.use(contactsRoutes);
+app.use(autoMergeRoutes);
 app.use(emailIssuesRoutes);
 app.use(minutesRoutes);
 app.use(consentsRoutes);
 app.use(schedulerRoutes);
 app.use(dashboardRoutes);
+app.use(applicationsRoutes);
 
 app.listen(PORT, () => {
   console.log(`scm-tools dashboard running at http://localhost:${PORT}`);
