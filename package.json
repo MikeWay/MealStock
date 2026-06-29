@@ -1,6 +1,6 @@
 {
   "name": "meal-stock-control",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "description": "Meal Stock Control — real-time multi-tablet server with PostgreSQL",
   "main": "dist/server.js",
   "scripts": {

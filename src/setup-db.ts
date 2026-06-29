@@ -112,6 +112,21 @@ async function setup(): Promise<void> {
       console.log(`Migrated ${migRes.rowCount} session rows to positive sign convention.`);
     }
 
+    // One-time migration: add Saturday (idx 8) and Sunday (idx 9) for existing dishes
+    for (const [idx, name] of [[8, 'Saturday'], [9, 'Sunday']] as [number, string][]) {
+      const r = await client.query(
+        `INSERT INTO sessions(dish_id, session_idx, session_name, used)
+         SELECT d.id, $1, $2, 0 FROM dishes d
+         WHERE NOT EXISTS (
+           SELECT 1 FROM sessions s WHERE s.dish_id = d.id AND s.session_idx = $1
+         )`,
+        [idx, name]
+      );
+      if ((r.rowCount ?? 0) > 0) {
+        console.log(`Inserted ${r.rowCount} '${name}' session rows.`);
+      }
+    }
+
     console.log('Done.');
   } finally {
     client.release();

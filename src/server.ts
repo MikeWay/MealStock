@@ -25,6 +25,7 @@ const pool = new Pool(cfg);
 const SESSIONS = [
   'Tues Improv', 'Tues Cruisers', 'Wed Diners', 'Wed Dinghies',
   'Thurs Diners', 'Thurs Juniors', 'Thurs Cruisers', 'Friday',
+  'Saturday', 'Sunday',
 ] as const;
 
 type Category = 'Meat' | 'Non-Meat' | 'Desserts';
@@ -90,7 +91,7 @@ async function loadFullState(): Promise<AppState> {
 
     const sessionsByDish: Record<number, number[]> = {};
     for (const row of sessionsRes.rows) {
-      if (!sessionsByDish[row.dish_id]) sessionsByDish[row.dish_id] = Array(8).fill(0) as number[];
+      if (!sessionsByDish[row.dish_id]) sessionsByDish[row.dish_id] = Array(SESSIONS.length).fill(0) as number[];
       sessionsByDish[row.dish_id][row.session_idx] = row.used;
     }
 
@@ -111,7 +112,7 @@ async function loadFullState(): Promise<AppState> {
         start:       d.start,
         ordered:     d.ordered,
         corrections: d.corrections,
-        sessions:    sessionsByDish[d.id] ?? (Array(8).fill(0) as number[]),
+        sessions:    sessionsByDish[d.id] ?? (Array(SESSIONS.length).fill(0) as number[]),
       });
     }
 
